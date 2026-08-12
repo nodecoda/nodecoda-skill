@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+（进行中；下次发布时归档。）
+
+## [0.2.8] — 2026-08-12
+
 ### Added - CLI Project Mode passthrough (npx-reachable project tooling)
 
 - `nodecoda-skill project <cmd> [args]` and `nodecoda-skill save-build <build_id>`
