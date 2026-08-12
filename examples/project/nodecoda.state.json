@@ -1,0 +1,13 @@
+{
+  "phase": "SOURCE_READY",
+  "rev": 0,
+  "current_build_id": null,
+  "source_sha256": null,
+  "last_diagnostics": [],
+  "history": [
+    { "phase": "INIT", "at": "2026-08-12T00:00:00Z", "rev": 0 },
+    { "phase": "CLARIFYING", "at": "2026-08-12T00:01:00Z", "rev": 0 },
+    { "phase": "DESIGNED", "at": "2026-08-12T00:05:00Z", "rev": 0 },
+    { "phase": "SOURCE_READY", "at": "2026-08-12T00:06:00Z", "rev": 0 }
+  ]
+}

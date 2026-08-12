@@ -1,0 +1,72 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate-skill:
+    name: Validate skill manifest and references
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate manifest.json
+        run: |
+          for f in skills/*/manifest.json; do
+            echo "Validating $f"
+            node -e "JSON.parse(require('fs').readFileSync('$f','utf8'))"
+          done
+
+      - name: Check all referenced files exist
+        run: |
+          python3 -c "
+          import json, os, sys
+          ok = True
+          for root, _, files in os.walk('skills'):
+              for f in files:
+                  if f == 'manifest.json':
+                      m = json.load(open(os.path.join(root, f)))
+                      base = root
+                      # manifest 'references' entries already carry the
+                      # 'references/' prefix (e.g. "references/mcp-contract.md"),
+                      # so join against the skill dir, not a second prefix.
+                      for ref in m.get('references', []):
+                          p = os.path.join(base, ref)
+                          if not os.path.exists(p):
+                              print(f'MISSING reference: {p}')
+                              ok = False
+                      for ex in m.get('examples', []):
+                          p = os.path.join(base, ex)
+                          if not os.path.exists(p):
+                              print(f'MISSING example: {p}')
+                              ok = False
+          sys.exit(0 if ok else 1)
+          "
+
+      - name: Verify target_profile pinned to supported list
+        run: |
+          python3 -c "
+          import json, sys
+          supported = {'dify-1.16-graphon-0.6'}
+          ok = True
+          for root, _, files in __import__('os').walk('skills'):
+              for f in files:
+                  if f == 'manifest.json':
+                      m = json.load(open(__import__('os').path.join(root, f)))
+                      tp = m.get('target_profile')
+                      if tp and tp not in supported:
+                          print(f'UNSUPPORTED target_profile: {tp} in {f}')
+                          ok = False
+          sys.exit(0 if ok else 1)
+          "
+
+  npm-test:
+    name: npm test (contract + framing + project + http + live-mcp + agent-detect)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run full test suite
+        run: npm test

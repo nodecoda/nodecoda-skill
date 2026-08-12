@@ -1,0 +1,293 @@
+#!/usr/bin/env node
+// scripts/test-http-server.mjs
+// Transport tests for scripts/mcp-http-server.mjs (Streamable HTTP MCP).
+// Runs against a local upstream REST stub — no network, no external deps.
+//
+// Asserts: initialize / tools.list / tools.call (GET + POST), bearer
+// pass-through to upstream, 401 without auth, CORS preflight, SSE channel,
+// 405 DELETE, 406 GET without SSE Accept, parse-error 400, unknown tool.
+
+import { createServer } from 'node:http';
+import { request as httpRequest } from 'node:http';
+import { spawn } from 'node:child_process';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { join, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { resolveUpstreamBase } from './mcp-core.mjs';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(__dirname, '..');
+
+let pass = 0, fail = 0;
+const ok = (n) => { console.log(`  ${'\x1b[32m✓\x1b[0m'} ${n}`); pass++; };
+const bad = (n, why) => { console.log(`  ${'\x1b[31m✗\x1b[0m'} ${n}\n      ${why}`); fail++; };
+
+// ---- mcp-core upstream base resolution (regression) -----------------------
+// The gateway surface that accepts sk-... keys is /v1, NOT /api/v1 (the
+// admin base returns 401 INVALID_TOKEN for opaque keys). Guard the default
+// and the override order.
+
+console.log('mcp-core upstream base regression');
+{
+  const cases = [
+    ['defaults to MCP gateway /v1', {}, 'https://www.nodecoda.com/v1'],
+    ['NODECODA_MCP_BASE wins', { NODECODA_MCP_BASE: 'http://mcp.local:8000', NODECODA_API_BASE: 'http://admin.local' }, 'http://mcp.local:8000'],
+    ['NODECODA_API_BASE used as legacy alias', { NODECODA_API_BASE: 'http://legacy.local/v1/' }, 'http://legacy.local/v1'],
+    ['single trailing slash stripped', { NODECODA_MCP_BASE: 'https://example.com/v1/' }, 'https://example.com/v1'],
+  ];
+  for (const [name, env, expected] of cases) {
+    const got = resolveUpstreamBase(env);
+    if (got === expected) ok(name);
+    else bad(name, `expected ${expected}, got ${got}`);
+  }
+}
+console.log('http MCP server tests');
+
+// ---- local upstream REST stub ------------------------------------------
+
+const seenAuth = [];
+// Mimic the live gateway: responses are wrapped in { code, message, data },
+// and SUCCEEDED polls carry artifact *metadata* only — the raw content lives
+// behind GET /workflow-builds/{id}/artifact.
+const wrap = (obj) => ({ code: 0, message: 'success', data: obj });
+const stub = createServer((req, res) => {
+  seenAuth.push(req.headers.authorization ?? null);
+  if (req.method === 'POST' && req.url?.startsWith('/workflow-builds')) {
+    res.setHeader('Content-Type', 'application/json');
+    res.writeHead(202);
+    res.end(JSON.stringify(wrap({ build_id: 'build_stub', status: 'QUEUED', poll_after_ms: 10 })));
+    return;
+  }
+  if (req.method === 'GET' && req.url === '/workflow-builds/build_stub') {
+    res.setHeader('Content-Type', 'application/json');
+    res.writeHead(200);
+    res.end(JSON.stringify(wrap({
+      build_id: 'build_stub',
+      status: 'SUCCEEDED',
+      artifact_sha256: 'abc123',
+      artifact_size: 12,
+      artifact_media_type: 'application/yaml',
+      artifact_available: true,
+    })));
+    return;
+  }
+  if (req.method === 'GET' && req.url === '/workflow-builds/build_stub/artifact') {
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.writeHead(200);
+    res.end('name: hello\n');
+    return;
+  }
+  res.setHeader('Content-Type', 'application/json');
+  res.writeHead(404);
+  res.end(JSON.stringify({ error: 'not found' }));
+});
+await new Promise((r) => stub.listen(0, '127.0.0.1', r));
+const stubPort = stub.address().port;
+
+// ---- spawn the MCP HTTP server on an ephemeral port ---------------------
+
+const child = spawn(process.execPath, [join(REPO_ROOT, 'scripts/mcp-http-server.mjs'), '--port', '0'], {
+  env: { ...process.env, NODECODA_API_BASE: `http://127.0.0.1:${stubPort}` },
+  stdio: ['ignore', 'pipe', 'inherit'],
+});
+let out = '';
+child.stdout.on('data', (b) => { out += b.toString('utf8'); });
+
+let mcpPort = null;
+const deadline = Date.now() + 5000;
+while (!mcpPort && Date.now() < deadline) {
+  const m = /ready:\s+http:\/\/127\.0\.0\.1:(\d+)\/mcp/.exec(out);
+  if (m) mcpPort = Number(m[1]);
+  if (!mcpPort) await sleep(50);
+}
+if (!mcpPort) {
+  console.error('MCP server did not report a listening port:\n' + out);
+  process.exit(2);
+}
+
+// ---- tiny HTTP client ---------------------------------------------------
+
+function httpReq(method, path, { headers = {}, body, onFirstData, port = mcpPort } = {}) {
+  return new Promise((resolve, reject) => {
+    const data = body === undefined ? undefined : (typeof body === 'string' ? body : JSON.stringify(body));
+    const req = httpRequest({
+      host: '127.0.0.1', port, path, method,
+      headers: {
+        ...(data !== undefined ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data, 'utf8') } : {}),
+        ...headers,
+      },
+    }, (res) => {
+      let out = '';
+      res.on('data', (c) => {
+        out += c.toString('utf8');
+        if (onFirstData) {
+          resolve(onFirstData({ status: res.statusCode, headers: res.headers, body: out }));
+          req.destroy();
+        }
+      });
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: out }));
+    });
+    req.on('error', reject);
+    if (data !== undefined) req.write(data);
+    req.end();
+  });
+}
+
+const AUTH = { Authorization: 'Bearer sk-test-key' };
+const BASE = `http://127.0.0.1:${mcpPort}/mcp`;
+
+// ---- tests --------------------------------------------------------------
+
+console.log('http MCP server tests');
+
+// 1. initialize
+{
+  const r = await httpReq('POST', '/mcp', {
+    headers: AUTH,
+    body: { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'http-test', version: '0' } } },
+  });
+  const p = JSON.parse(r.body);
+  if (r.status === 200 && p?.result?.serverInfo?.name?.includes('nodecoda')) ok('POST initialize reports NodeCoda server');
+  else bad('POST initialize', `status=${r.status} body=${r.body.slice(0, 200)}`);
+}
+
+// 2. tools/list
+{
+  const r = await httpReq('POST', '/mcp', { headers: AUTH, body: { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} } });
+  const p = JSON.parse(r.body);
+  const names = (p?.result?.tools ?? []).map((t) => t.name).sort();
+  const expected = ['build_dify_workflow', 'cancel_workflow_build', 'get_workflow_build'];
+  if (r.status === 200 && JSON.stringify(names) === JSON.stringify(expected)) ok('tools/list exposes the 3 manifest tools');
+  else bad('tools/list', `got ${JSON.stringify(names)} status=${r.status}`);
+}
+
+// 3. tools/call get_workflow_build (bearer pass-through to upstream)
+{
+  const r = await httpReq('POST', '/mcp', {
+    headers: AUTH,
+    body: { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'get_workflow_build', arguments: { build_id: 'build_stub' } } },
+  });
+  const p = JSON.parse(r.body);
+  const text = p?.result?.content?.[0]?.text ?? '';
+  const upstreamSawBearer = seenAuth.some((a) => a === 'Bearer sk-test-key');
+  // Envelope must be unwrapped (no "code" wrapper) and the raw artifact must
+  // be attached as artifact.content (best-effort download from the stub).
+  const hasArtifactContent = text.includes('"content": "name: hello\\n"') || text.includes('name: hello');
+  const unwrapped = !text.includes('"code"');
+  if (r.status === 200 && text.includes('SUCCEEDED') && upstreamSawBearer && unwrapped && hasArtifactContent && text.includes('abc123')) {
+    ok('tools/call unwraps gateway envelope and attaches artifact.content');
+  } else {
+    bad('tools/call get', `status=${r.status} upstreamAuth=${JSON.stringify(seenAuth)} unwrapped=${unwrapped} body=${r.body.slice(0, 300)}`);
+  }
+}
+
+// 4. tools/call build_dify_workflow (POST to upstream)
+{
+  const r = await httpReq('POST', '/mcp', {
+    headers: AUTH,
+    body: { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'build_dify_workflow', arguments: { source: '@language nodecoda/1', source_filename: 'x.ncoda', language_identity: 'nodecoda/1', target_profile: 'dify-1.16-graphon-0.6', idempotency_key: 'k' } } },
+  });
+  const p = JSON.parse(r.body);
+  const text = p?.result?.content?.[0]?.text ?? '';
+  if (r.status === 200 && text.includes('QUEUED') && !text.includes('"code"')) ok('tools/call build submits to upstream (envelope unwrapped)');
+  else bad('tools/call build', `status=${r.status} body=${r.body.slice(0, 200)}`);
+}
+
+// 5. unknown tool -> -32601
+{
+  const r = await httpReq('POST', '/mcp', { headers: AUTH, body: { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'nope', arguments: {} } } });
+  const p = JSON.parse(r.body);
+  if (r.status === 200 && p?.error?.code === -32601) ok('unknown tool returns -32601');
+  else bad('unknown tool', `status=${r.status} body=${r.body.slice(0, 200)}`);
+}
+
+// 6. no auth -> 401 JSON-RPC error
+{
+  const r = await httpReq('POST', '/mcp', { body: { jsonrpc: '2.0', id: 6, method: 'tools/list', params: {} } });
+  const p = JSON.parse(r.body);
+  if (r.status === 401 && p?.error?.code === -32001) ok('missing auth rejected with 401 JSON-RPC error');
+  else bad('no auth', `status=${r.status} body=${r.body.slice(0, 200)}`);
+}
+
+// 7. bad JSON -> 400 parse error
+{
+  const r = await httpReq('POST', '/mcp', { headers: AUTH, body: '{not json' });
+  const p = JSON.parse(r.body);
+  if (r.status === 400 && p?.error?.code === -32700) ok('malformed JSON -> 400 parse error');
+  else bad('bad JSON', `status=${r.status} body=${r.body.slice(0, 200)}`);
+}
+
+// 8. CORS preflight
+{
+  const r = await httpReq('OPTIONS', '/mcp', { headers: { Origin: 'https://example.com', 'Access-Control-Request-Method': 'POST' } });
+  if (r.status === 204 && r.headers['access-control-allow-origin'] === '*') ok('OPTIONS preflight returns CORS headers');
+  else bad('OPTIONS', `status=${r.status} allow-origin=${r.headers['access-control-allow-origin']}`);
+}
+
+// 9. DELETE -> 405
+{
+  const r = await httpReq('DELETE', '/mcp', { headers: AUTH });
+  if (r.status === 405) ok('DELETE returns 405 (stateless)');
+  else bad('DELETE', `status=${r.status}`);
+}
+
+// 10. GET SSE channel
+{
+  const r = await httpReq('GET', '/mcp', {
+    headers: { Accept: 'text/event-stream', ...AUTH },
+    onFirstData: (first) => first, // resolve as soon as the stream starts
+  });
+  if (r.status === 200 && (r.headers['content-type'] ?? '').includes('text/event-stream')) ok('GET returns SSE channel');
+  else bad('GET SSE', `status=${r.status} content-type=${r.headers['content-type']}`);
+}
+
+// 11. GET without SSE Accept -> 406
+{
+  const r = await httpReq('GET', '/mcp', { headers: AUTH });
+  if (r.status === 406) ok('GET without SSE Accept -> 406');
+  else bad('GET plain', `status=${r.status}`);
+}
+
+// 12. notification -> 202 no body
+{
+  const r = await httpReq('POST', '/mcp', { headers: AUTH, body: { jsonrpc: '2.0', method: 'notifications/initialized', params: {} } });
+  if (r.status === 202 && r.body === '') ok('notification acknowledged with 202 empty body');
+  else bad('notification', `status=${r.status} body=${r.body.slice(0, 100)}`);
+}
+
+// 13. cli.mjs `mcp --http` wiring (npx zero-install path, HTTP transport)
+{
+  const cli = spawn(process.execPath, [join(REPO_ROOT, 'scripts/cli.mjs'), 'mcp', '--http', '--port', '0'], {
+    env: { ...process.env, NODECODA_API_BASE: `http://127.0.0.1:${stubPort}` },
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
+  let cliOut = '';
+  cli.stdout.on('data', (b) => { cliOut += b.toString('utf8'); });
+  let cliPort = null;
+  const cliDeadline = Date.now() + 5000;
+  while (!cliPort && Date.now() < cliDeadline) {
+    const m = /ready:\s+http:\/\/127\.0\.0\.1:(\d+)\/mcp/.exec(cliOut);
+    if (m) cliPort = Number(m[1]);
+    if (!cliPort) await sleep(50);
+  }
+  if (!cliPort) {
+    bad('cli mcp --http serves MCP', `no port reported:\n${cliOut.slice(0, 300)}`);
+  } else {
+    const r = await httpReq('POST', '/mcp', {
+      port: cliPort,
+      headers: AUTH,
+      body: { jsonrpc: '2.0', id: 13, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'cli-http-test', version: '0' } } },
+    });
+    const p = JSON.parse(r.body);
+    if (r.status === 200 && p?.result?.serverInfo?.name?.includes('nodecoda')) ok('cli mcp --http serves MCP over Streamable HTTP');
+    else bad('cli mcp --http serves MCP', `status=${r.status} body=${r.body.slice(0, 200)}`);
+  }
+  cli.kill();
+}
+
+// ---- cleanup ------------------------------------------------------------
+
+child.kill();
+stub.close();
+console.log(`\n${fail === 0 ? '\x1b[32m' : '\x1b[31m'}${fail === 0 ? 'OK' : 'FAIL'}\x1b[0m   ${pass} passed, ${fail} failed`);
+process.exit(fail === 0 ? 0 : 1);

@@ -1,0 +1,67 @@
+# Project-local Codex configuration for the nodecoda-skill distribution.
+#
+# Copy this file to config.toml and fill in YOUR key, then keep config.toml
+# local (it is gitignored). Codex sessions opening this repo will pick it up
+# automatically and wire up the NodeCoda MCP server.
+#
+# SECURITY: never commit a real key. The real config.toml is gitignored.
+# Obtain a key from your NodeCoda deployment (sk-...). For the local dev
+# stack (local MCP service on :8000) the key must exist in the LOCAL backend database.
+
+# == Primary: remote MCP over the public endpoint (recommended) =============
+# https://www.nodecoda.com/mcp is the MCP Streamable HTTP gateway. The key is
+# read from the NODECODA_KEY environment variable at session start — it never
+# lives in this file (export it in your shell profile).
+# The /mcp route is live (verified 2026-08-12) — see
+# skills/nodecoda-workflow/references/public-service.md "公网 MCP 直连" for
+# the routing rules and the self-hosting alternative.
+[mcp_servers.nodecoda]
+url = "https://www.nodecoda.com/mcp"
+bearer_token_env_var = "NODECODA_KEY"
+enabled = true
+startup_timeout_sec = 5
+
+# == Alternative 1: npx zero-install stdio (no clone, no local install) =====
+# Codex runs `npx -y @nodecoda/skill mcp` on session start — the npm package
+# is fetched on demand. The key is read from the NODECODA_KEY environment
+# variable at request time (export it in your shell profile; it never lives
+# in this file). Requires the package on the npm registry (v0.2.0+).
+#
+# [mcp_servers.nodecoda]
+# command = "npx"
+# args = ["-y", "@nodecoda/skill", "mcp"]
+# enabled = true
+# startup_timeout_sec = 5
+
+# == Alternative 2: local HTTP server (mcp-http-server.mjs) =================
+# Same Streamable HTTP transport and tools as the public endpoint, served
+# from this repo. Use it before the public /mcp route is deployed, or for
+# self-hosting behind your own proxy. Client bearer tokens are passed through
+# to the upstream Workspace API; NODECODA_KEY env is used as a fallback.
+#
+# [mcp_servers.nodecoda]
+# command = "node"
+# args = ["scripts/mcp-http-server.mjs", "--port", "4001"]
+# enabled = true
+# startup_timeout_sec = 5
+
+# == Alternative 3: local dev stack (default for the local MCP service on :8000) ==
+# Points the Codex MCP client at the locally deployed NodeCoda dev stack.
+# The key must be an API key (sk-...) that exists in the LOCAL backend
+# database; remote/production keys are rejected with 401.
+#
+# [mcp_servers.nodecoda]
+# url = "http://127.0.0.1:8000/mcp"
+# http_headers = { Authorization = "Bearer sk-REPLACE_WITH_YOUR_LOCAL_KEY" }
+# enabled = true
+# startup_timeout_sec = 5
+
+# == Alternative 4: stdio bridge from a repo clone ===========================
+# Wraps the REST Workflow Build surface as the same three MCP tools.
+# Requires NODECODA_KEY at request time.
+#
+# [mcp_servers.nodecoda]
+# command = "node"
+# args = ["scripts/mcp-stdio-server.mjs"]
+# enabled = true
+# startup_timeout_sec = 5

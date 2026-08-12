@@ -1,0 +1,73 @@
+name: release
+
+on:
+  # Releases are tag-driven only: push a v*.*.* tag matching
+  # skills/nodecoda-workflow/manifest.json (git tag vX.Y.Z && git push origin
+  # vX.Y.Z). Manual workflow_dispatch must select that same v* tag in the UI;
+  # running it on `main` fails the verify guard below by design.
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write  # for npm trusted publishing
+
+jobs:
+  verify:
+    name: Verify version + manifest
+    runs-on: ubuntu-latest
+    outputs:
+      skill-version: ${{ steps.v.outputs.skill-version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          REF_TYPE="${GITHUB_REF_TYPE}"
+          SKILL_VER=$(node -p "require('./skills/nodecoda-workflow/manifest.json').version")
+          echo "skill-version=$SKILL_VER"
+          echo "tag=$TAG"
+          if [[ "$REF_TYPE" != "tag" ]]; then
+            echo "::error::Release must be triggered by a v* version tag, not ref '$TAG' (ref_type=$REF_TYPE). Push a matching tag: git tag v$SKILL_VER && git push origin v$SKILL_VER"
+            exit 1
+          fi
+          if [[ "$TAG" != "v$SKILL_VER" ]]; then
+            echo "::error::Tag $TAG does not match manifest version $SKILL_VER. Bump manifest.json/package.json first, then tag v$SKILL_VER."
+            exit 1
+          fi
+
+  publish-npm:
+    name: Publish @nodecoda/skill to npm
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org/
+      - name: Validate package.json
+        run: node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))"
+      - name: Publish
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  github-release:
+    name: GitHub Release with npm tarball
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pack npm tarball
+        run: npm pack
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: "*.tgz"
