@@ -189,14 +189,19 @@ node scripts/save-build.mjs <build_id> --source builds/<build_id>/<source_filena
 
 ## 参考
 
-- [Source 生成快速上手](references/source-generation.md)
+- [References 索引](references/README.md)
+- [文法参考 (EBNF)](references/grammar-reference.md) — 语法合法性先查这里
 - [NodeCoda Workflow Language 参考](references/language-reference.md)
+- [目标能力矩阵](references/target-capabilities.md)
 - [NodeCoda MCP 合同](references/mcp-contract.md)
 - [公共服务流程](references/public-service.md)
+- [Source 生成快速上手](references/source-generation.md)
+- [项目化工作流](references/project-workflow.md)
 - [诊断解读](references/diagnostics.md)
-- [目标能力矩阵](references/target-capabilities.md)
-- [迭代循环](references/iteration-loop.md)
+- [诊断→修复映射（实证）](references/diagnostics-map.md) — 报错先查这里
 - [失败处理](references/failure-modes.md)
+- [反模式清单（实证）](references/gotchas.md)
+- [迭代循环](references/iteration-loop.md)
 
 ## 公共部署
 

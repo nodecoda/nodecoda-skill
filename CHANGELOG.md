@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 （进行中；下次发布时归档。）
 
+## [0.2.14] — 2026-08-13
+
+### Added - References 目录规范与实证文档
+
+确立 `references/` 内容规范（放什么/什么格式），见 `docs/references-convention.md`：
+5 类 12 文件 + 索引，统一来源声明/实证标注/对照表格式模板。
+
+合入 3 份高价值文档（此前只在工作分支，发布包缺失）：
+
+- `references/grammar-reference.md` — EBNF 文法参考（源真理 `lang/docs/dify-dsl.y` + `parser.py`，尾部带源码对照表）；
+- `references/diagnostics-map.md` — 实证诊断码 → 修复动作映射表（真实 Build 回写）；
+- `references/gotchas.md` — 实证反模式清单 G1–G8（现象 → 原因 → 正确写法）；
+- `references/README.md` — 索引与维护规则。
+
+`manifest.references` 扩到 13 项；`validate-skill.mjs` 新增反向校验：
+references/ 下存在的 .md 必须声明在 manifest 中（防漏声明）；SKILL.md 参考区
+同步补全链接。
+
 ## [0.2.13] — 2026-08-13
 
 ### Added - CLI `--version` / `-v`

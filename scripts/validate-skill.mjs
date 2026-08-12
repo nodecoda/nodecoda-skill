@@ -133,6 +133,20 @@ async function validatePaths(skillName, skillDir, manifest, key, mustHaveContent
   }
 }
 
+// Reverse check: every .md file physically present under references/ must be
+// declared in manifest.references — otherwise the skill ships docs the agent
+// (and the convention, see docs/references-convention.md) cannot see.
+async function validateReferencesComplete(skillName, skillDir, manifest) {
+  const refsDir = join(skillDir, 'references');
+  if (!existsSync(refsDir)) return;
+  const declared = new Set(Array.isArray(manifest?.references) ? manifest.references : []);
+  const files = (await readdir(refsDir)).filter((f) => f.endsWith('.md'));
+  for (const f of files) {
+    const rel = `references/${f}`;
+    if (!declared.has(rel)) err(skillName, `references/${f} exists on disk but is missing from manifest.references`);
+  }
+}
+
 const NCODA_HEADER = /^@language\s+nodecoda\/1\s*$/m;
 const NCODA_MODE = /^@mode\s+(workflow|advanced-chat)\s*$/m;
 
@@ -173,6 +187,7 @@ async function validateOne(skillName) {
   validateManifest(skillName, m);
   await validateSkillMd(skillName, skillDir, m);
   await validatePaths(skillName, skillDir, m, 'references');
+  await validateReferencesComplete(skillName, skillDir, m);
   await validatePaths(skillName, skillDir, m, 'examples', false);
   await validateNcodaExamples(skillDir, m);
 }
