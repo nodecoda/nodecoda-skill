@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 （进行中；下次发布时归档。）
 
+## [0.2.11] — 2026-08-12
+
+### Fixed - 显式目录的 scope 判定（home 前缀误判）
+
+`add <name> ./.codex/skills`（或任何在 `$HOME` 下的项目工作区，如
+`~/work/proj/.codex/skills`）之前被 `dest.startsWith(homedir())` 误判为
+"用户级"，导致 MCP 配置写到 `~/.codex/config.toml` 而不是项目
+`.codex/config.toml`。现在按**平台对应的 HOME agent 目录**判定
+（`~/.claude`、`~/.codex` 本身或之下才算 home scope）。`mcp-register <dir>`
+同样修正。回归测试：explicit `./.codex/skills` under HOME → 项目级 + MCP 落在
+skill 旁（agent-detect #6）。
+
+### CI
+
+- release smoke：先以未缓存 `npm view` 轮询 registry（≤3 分钟）再 `npx` 安装，
+  消除 npm CDN 传播延迟导致的偶发 ETARGET；smoke 改走显式目录并断言
+  `[mcp_servers.nodecoda]` 自动写入 `.codex/config.toml`。
+
 ## [0.2.10] — 2026-08-12
 
 ### Added - Seamless MCP auto-registration（真正"无感"接线）

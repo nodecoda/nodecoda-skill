@@ -35,7 +35,7 @@
 
 import { readFile, writeFile, cp, mkdir, access } from 'node:fs/promises';
 import { existsSync, constants } from 'node:fs';
-import { join, resolve, dirname, basename } from 'node:path';
+import { join, resolve, dirname, basename, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
@@ -186,6 +186,16 @@ function platformFromPath(p) {
   return null;
 }
 
+// Is `p` inside the platform's canonical HOME-level agent dir
+// (~/.claude, ~/.codex, ...)? A plain startsWith(homedir()) check is wrong:
+// project workspaces commonly live under $HOME (e.g. ~/work/...), so the
+// path must actually be (or sit under) the HOME agent dir itself.
+function isHomeAgentDir(p, platform) {
+  if (!platform || !PLATFORM_DIRS[platform]) return false;
+  const homeAgent = join(homedir(), PLATFORM_DIRS[platform]);
+  return p === homeAgent || p.startsWith(homeAgent + sep);
+}
+
 // Detect which agent to install for, and at which level. Returns
 // { platform, scope } where scope is 'home' (user-level: ~/.claude/skills,
 // ~/.codex/skills, ...) or 'project' (<cwd>/.claude/skills, ...).
@@ -239,7 +249,7 @@ async function cmdInstall(skillName, explicitTarget) {
       explicitPath = resolve(process.cwd(), explicitTarget.replace(/^~/, homedir()));
       dest = explicitPath;
       platform = platformFromPath(dest);
-      scope = dest.startsWith(homedir()) ? 'home' : 'project';
+      scope = isHomeAgentDir(dest, platform) ? 'home' : 'project';
       if (platform === 'cursor') cursor = true;
     } else {
       die(`unknown target '${explicitTarget}'. Use one of: ${Object.keys(PLATFORM_DIRS).join(', ')}, or an absolute/path/starting-with-dot-or-tilde`);
@@ -290,7 +300,7 @@ async function cmdMcpRegister(rest) {
   } else if (target && (target.startsWith('/') || target.startsWith('~') || target.startsWith('.'))) {
     const p = resolve(process.cwd(), target.replace(/^~/, homedir()));
     platform = platformFromPath(p);
-    scope = p.startsWith(homedir()) ? 'home' : 'project';
+    scope = isHomeAgentDir(p, platform) ? 'home' : 'project';
     if (!platform) die(`cannot infer agent platform from path '${target}'`);
   } else {
     const picked = detectPlatform(process.cwd(), manifest.platforms);

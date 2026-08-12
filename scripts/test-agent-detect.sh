@@ -98,13 +98,23 @@ if grep -q '"nodecoda"' "$D5/.cursor/mcp.json" 2>/dev/null; then
   ok "cursor project: MCP auto-registered in .cursor/mcp.json"
 else bad "cursor project: MCP auto-registered in .cursor/mcp.json"; fi
 
-# 6. mcp-register subcommand: repair path registers without reinstalling
-D6="$TMP/repair"; mkdir -p "$D6"
+# 6. explicit dir target under $HOME stays project-scoped (regression:
+#    plain startsWith(homedir()) misclassified ~/work/proj/.codex/skills as
+#    home-level and wrote the MCP config to ~/.codex/config.toml)
+D6="$FAKE_HOME/proj"; mkdir -p "$D6"
+rm -f "$FAKE_HOME/.codex/config.toml"
+(cd "$D6" && "${NEUTRAL[@]}" "${CLI[@]}" ./.codex/skills >/dev/null 2>&1)
+if [ -f "$D6/.codex/skills/nodecoda-workflow/SKILL.md" ] && [ -f "$D6/.codex/config.toml" ] && [ ! -f "$FAKE_HOME/.codex/config.toml" ]; then
+  ok "explicit ./.codex/skills under HOME -> project-level + MCP next to skill"
+else bad "explicit ./.codex/skills under HOME -> project-level + MCP next to skill"; fi
+
+# 7. mcp-register subcommand: repair path registers without reinstalling
+D7="$TMP/repair"; mkdir -p "$D7"
 rm -f "$FAKE_CLAUDE_LOG"
-(cd "$D6" && env -u CODEX_HOME -u CLAUDE_CODE_HOME -u GEMINI_CACHE_DIR \
+(cd "$D7" && env -u CODEX_HOME -u CLAUDE_CODE_HOME -u GEMINI_CACHE_DIR \
   CLAUDE_CODE_ENTRYPOINT=/tmp/cc HOME="$FAKE_HOME" PATH="$FAKE_BIN:$PATH" FAKE_CLAUDE_LOG="$FAKE_CLAUDE_LOG" \
   node "$REPO_ROOT/scripts/cli.mjs" mcp-register >/dev/null 2>&1)
-if grep -q 'mcp add nodecoda --scope user' "$FAKE_CLAUDE_LOG" 2>/dev/null && [ ! -d "$D6/.claude" ]; then
+if grep -q 'mcp add nodecoda --scope user' "$FAKE_CLAUDE_LOG" 2>/dev/null && [ ! -d "$D7/.claude" ]; then
   ok "mcp-register: registers MCP without reinstalling the skill"
 else bad "mcp-register: registers MCP without reinstalling the skill"; fi
 
