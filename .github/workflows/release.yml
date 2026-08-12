@@ -71,16 +71,23 @@ jobs:
     needs: [verify, publish-npm]
     runs-on: ubuntu-latest
     steps:
-      - name: npx add + version parity
+      - name: npx add + version parity + MCP auto-registration
         run: |
           VER="${{ needs.verify.outputs.skill-version }}"
-          # npm CDN propagation can lag the publish by seconds; retry.
-          for i in $(seq 1 6); do
-            if npx -y "@nodecoda/skill@$VER" add nodecoda-workflow codex; then break; fi
+          # npm CDN propagation can lag the publish by up to a minute or two;
+          # probe the registry directly (uncached) before installing.
+          for i in $(seq 1 18); do
+            if npm view "@nodecoda/skill@$VER" version >/dev/null 2>&1; then break; fi
             sleep 10
           done
+          npm view "@nodecoda/skill@$VER" version
+          # Explicit dir = exact location (named targets install user-wide).
+          npx -y "@nodecoda/skill@$VER" add nodecoda-workflow ./.codex/skills
           test -f .codex/skills/nodecoda-workflow/SKILL.md
           node -e "const m=require('./.codex/skills/nodecoda-workflow/manifest.json'); if (m.version !== process.argv[1]) { console.error('manifest version mismatch', m.version); process.exit(1); }" "$VER"
+          # The seamless part: the MCP server must be auto-registered for Codex.
+          test -f .codex/config.toml
+          grep -q '\[mcp_servers.nodecoda\]' .codex/config.toml
 
   github-release:
     name: GitHub Release with npm tarball
