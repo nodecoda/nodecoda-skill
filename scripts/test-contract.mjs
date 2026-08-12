@@ -326,6 +326,16 @@ async function smokeCliInstall() {
   const pkgVersion = JSON.parse(await readFile(join(REPO_ROOT, 'package.json'), 'utf8')).version;
   const tmp = await mkdtemp(join(tmpdir(), 'nccli-'));
   try {
+    // 0. --version / -v prints the package version (regression: used to
+    //    answer "unknown subcommand" — npx -y @nodecoda/skill --version is
+    //    the canonical install sanity check)
+    const verLong = spawnSync(process.execPath, [join(REPO_ROOT, 'scripts/cli.mjs'), '--version'], { cwd: REPO_ROOT, encoding: 'utf8' });
+    const verShort = spawnSync(process.execPath, [join(REPO_ROOT, 'scripts/cli.mjs'), '-v'], { cwd: REPO_ROOT, encoding: 'utf8' });
+    if (verLong.status === 0 && verLong.stdout.trim() === pkgVersion && verShort.stdout.trim() === pkgVersion) {
+      ok('cli --version / -v prints package version');
+    } else bad('cli --version / -v prints package version',
+      `long=${JSON.stringify(verLong.stdout.trim())} short=${JSON.stringify(verShort.stdout.trim())} pkg=${pkgVersion}`);
+
     // 1. list
     const list = spawnSync(process.execPath, [join(REPO_ROOT, 'scripts/cli.mjs'), 'list'], { cwd: REPO_ROOT, encoding: 'utf8' });
     if (list.status === 0 && list.stdout.includes('nodecoda-workflow')) ok('cli list shows bundled nodecoda-workflow');

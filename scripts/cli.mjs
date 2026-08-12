@@ -34,7 +34,7 @@
 //                     rules, not SKILL.md; content inlined with frontmatter)
 
 import { readFile, writeFile, cp, mkdir, access } from 'node:fs/promises';
-import { existsSync, constants } from 'node:fs';
+import { existsSync, constants, readFileSync } from 'node:fs';
 import { join, resolve, dirname, basename, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
@@ -43,6 +43,8 @@ import { registerMcp, MCP_SERVER } from './mcp-register.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
+// Single source of truth for the CLI's own version (bumped alongside npm).
+const PKG_VERSION = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')).version;
 const SKILLS_DIR = join(REPO_ROOT, 'skills');
 
 // Passthrough for Project Mode tooling: `nodecoda-skill project ...` and
@@ -359,6 +361,7 @@ function help() {
     `  nodecoda-skill save-build <build_id>     Save a build record + artifact locally`,
     `  nodecoda-skill mcp --http [--port N]       Serve MCP Streamable HTTP instead`,
     `  nodecoda-skill mcp-register [target]       (Re)register MCP server (repair/upgrade)`,
+    `  nodecoda-skill --version                  Print CLI version`,
     `  nodecoda-skill help                        Show this help`,
     ``,
     `Since v0.2.10, 'add'/'install' auto-registers the nodecoda MCP server for`,
@@ -403,6 +406,11 @@ try {
     case 'save-build':
     case 'save':
       code = runScript('save-build.mjs', rest); break;
+    case '--version':
+    case '-v':
+      console.log(PKG_VERSION);
+      code = 0;
+      break;
     case 'help':
     case '--help':
     case '-h':

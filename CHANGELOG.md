@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 （进行中；下次发布时归档。）
 
+## [0.2.13] — 2026-08-13
+
+### Added - CLI `--version` / `-v`
+
+`npx -y @nodecoda/skill --version`（安装自检最常用命令）之前报
+`unknown subcommand: --version`。现在直接输出 package.json 版本号
+（单一事实源，与 manifest 同步），`-v` 同义；help 文案同步补充。
+
 ## [0.2.12] — 2026-08-12
 
 ### Fixed - MCP stdio 应答帧格式：回显客户端输入格式（Claude Code JSONL 兼容）
