@@ -1,5 +1,10 @@
 # Project-local Codex configuration for the nodecoda-skill distribution.
 #
+# NOTE (v0.2.10+): `npx -y @nodecoda/skill add nodecoda-workflow` auto-appends
+# the zero-install [mcp_servers.nodecoda] stdio entry below (command="npx") to
+# your config.toml, so you usually do NOT need this file by hand. Keep it as a
+# reference for the preferred HTTP endpoint or custom/self-hosted setups.
+#
 # Copy this file to config.toml and fill in YOUR key, then keep config.toml
 # local (it is gitignored). Codex sessions opening this repo will pick it up
 # automatically and wire up the NodeCoda MCP server.

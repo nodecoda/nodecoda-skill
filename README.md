@@ -99,7 +99,9 @@ fix-and-retry loop until you get a Dify-ready artifact.
 ## Quick start — 30 seconds
 
 ```bash
-# 1. install the skill (auto-detects Codex / Claude Code / Gemini / Cursor)
+# 1. install the skill — `add` auto-detects Codex / Claude Code / Gemini /
+#    Cursor and auto-registers the `nodecoda` MCP server, so your agent gets
+#    the build_dify_workflow tools with zero manual wiring
 npx -y @nodecoda/skill add nodecoda-workflow
 
 # 2. get a key, then give it to your agent
@@ -150,9 +152,13 @@ npx -y @nodecoda/skill add nodecoda-workflow
 ```
 
 The CLI detects which agent you're using (Codex, Claude Code, Gemini CLI,
-Cursor) and drops the skill in the right place. You can also target it
-explicitly: `add nodecoda-workflow codex`, `... claude-code`,
-`... gemini-cli`, `... cursor`, or pass any directory.
+Cursor) and drops the skill in the right place — **and it auto-registers the
+`nodecoda` MCP server** (Claude Code via `claude mcp add`, Codex via
+`config.toml`, Gemini via `settings.json`, Cursor via `.cursor/mcp.json`), so
+your agent gets `build_dify_workflow` & co. with zero manual wiring. Named
+targets install user-wide (`~/.claude/skills`, `~/.codex/skills`, ...); pass
+any directory for an exact location. Repair the MCP wiring anytime with
+`npx -y @nodecoda/skill mcp-register <target>`.
 
 ### Option B — manual
 

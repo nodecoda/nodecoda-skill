@@ -16,7 +16,15 @@
 //                                             wiring: command="npx",
 //                                             args=["-y","@nodecoda/skill","mcp"])
 //   nodecoda-skill mcp --http [--port N]      Serve MCP Streamable HTTP instead
+//   nodecoda-skill mcp-register [target]      (Re)register the MCP server without
+//                                             reinstalling the skill
 //   nodecoda-skill help                       Show this help
+//
+// Since v0.2.10, `install`/`add` also auto-registers the `nodecoda` MCP server
+// for the target agent (Claude Code via `claude mcp add`, Codex via
+// config.toml, Gemini CLI via settings.json, Cursor via .cursor/mcp.json), so
+// agents gain the build_dify_workflow tools with zero manual wiring. See
+// scripts/mcp-register.mjs.
 //
 // Recognised target platforms for `install`:
 //   codex         -> ./.codex/skills/  (project) or ~/.codex/skills/ (fallback)
@@ -31,6 +39,7 @@ import { join, resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
+import { registerMcp, MCP_SERVER } from './mcp-register.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -162,60 +171,135 @@ function envPlatform() {
   return null;
 }
 
+// Infer the agent platform from an install path (used when the user passes an
+// explicit directory like ~/.claude/skills).
+function platformFromPath(p) {
+  const dirs = {
+    '.claude': 'claude-code',
+    '.codex': 'codex',
+    '.gemini': 'gemini-cli',
+    '.cursor': 'cursor',
+  };
+  for (const [seg, platform] of Object.entries(dirs)) {
+    if (p.includes(seg)) return platform;
+  }
+  return null;
+}
+
+// Detect which agent to install for, and at which level. Returns
+// { platform, scope } where scope is 'home' (user-level: ~/.claude/skills,
+// ~/.codex/skills, ...) or 'project' (<cwd>/.claude/skills, ...).
+//
+// Resolution order:
+//   1. the agent session that invoked the CLI (env markers)  -> home level
+//      ("make it work for my agent everywhere")
+//   2. an agent already present in the current project       -> project level
+//   3. an agent configured in the user's home                -> home level
+//   4. fallback: Codex, home level
 function detectPlatform(projectCwd, manifestPlatforms) {
   const inManifest = (p) => manifestPlatforms.includes(p);
 
   const fromEnv = envPlatform();
-  if (fromEnv && inManifest(fromEnv)) return fromEnv;
+  if (fromEnv && inManifest(fromEnv)) return { platform: fromEnv, scope: 'home' };
 
-  // Project-local agent dirs (the strongest non-env signal: this project is
-  // already set up for a specific agent).
+  // Project-local agent dirs (this project is already set up for an agent).
   for (const p of PLATFORM_PREFERENCE) {
-    if (inManifest(p) && PLATFORM_DIRS[p] && existsSync(join(projectCwd, PLATFORM_DIRS[p]))) return p;
+    if (inManifest(p) && PLATFORM_DIRS[p] && existsSync(join(projectCwd, PLATFORM_DIRS[p]))) {
+      return { platform: p, scope: 'project' };
+    }
   }
   // Home-level agent config.
   for (const p of PLATFORM_PREFERENCE) {
-    if (inManifest(p) && PLATFORM_DIRS[p] && existsSync(join(homedir(), PLATFORM_DIRS[p]))) return p;
+    if (inManifest(p) && PLATFORM_DIRS[p] && existsSync(join(homedir(), PLATFORM_DIRS[p]))) {
+      return { platform: p, scope: 'home' };
+    }
   }
-  return 'codex';
+  return { platform: 'codex', scope: 'home' };
 }
 
 async function cmdInstall(skillName, explicitTarget) {
   if (!skillName) die('usage: nodecoda-skill install <name> [target-platform|target-dir]');
   const { manifest } = await loadManifest(skillName);
-  // Decide target
-  let dest;
+
+  // Decide { platform, scope, dest, cursor } for this install.
+  let platform = null;
+  let scope = 'home';
+  let dest = null;
   let cursor = false;
+  let explicitPath = null;
+
   if (explicitTarget) {
     if (explicitTarget === 'cursor') {
-      cursor = true;
+      platform = 'cursor'; cursor = true;
     } else if (PLATFORM_DIRS[explicitTarget]) {
-      dest = targetDir(explicitTarget);
+      platform = explicitTarget;
+      scope = 'home'; // a named platform means "for my agent, user-wide"
+      dest = join(homedir(), PLATFORM_DIRS[explicitTarget], 'skills');
     } else if (explicitTarget.startsWith('/') || explicitTarget.startsWith('~') || explicitTarget.startsWith('.')) {
-      dest = resolve(process.cwd(), explicitTarget.replace(/^~/, homedir()));
+      explicitPath = resolve(process.cwd(), explicitTarget.replace(/^~/, homedir()));
+      dest = explicitPath;
+      platform = platformFromPath(dest);
+      scope = dest.startsWith(homedir()) ? 'home' : 'project';
+      if (platform === 'cursor') cursor = true;
     } else {
       die(`unknown target '${explicitTarget}'. Use one of: ${Object.keys(PLATFORM_DIRS).join(', ')}, or an absolute/path/starting-with-dot-or-tilde`);
     }
   } else {
-    // No explicit target: detect the platform instead of guessing.
-    //  1. the agent session that invoked the CLI (env markers)
-    //  2. an agent already present in the current project (existing dir)
-    //  3. an agent configured in the user's home
-    //  4. fallback: Codex (this repo's primary surface), project-local
+    // No explicit target: detect the platform + level instead of guessing
+    // (env session -> home, project agent dir -> project, home config ->
+    // home, fallback -> Codex home).
     const picked = detectPlatform(process.cwd(), manifest.platforms);
-    if (picked === 'cursor') {
+    platform = picked.platform;
+    scope = picked.scope;
+    if (platform === 'cursor') {
       cursor = true;
-    } else if (picked) {
-      dest = targetDir(picked);
     } else {
-      dest = join(homedir(), '.codex', 'skills');
+      dest = scope === 'home'
+        ? join(homedir(), PLATFORM_DIRS[platform], 'skills')
+        : join(process.cwd(), PLATFORM_DIRS[platform], 'skills');
     }
   }
+
   if (cursor) {
     await installCursor(skillName);
   } else {
     await installInto(skillName, dest);
   }
+
+  // Seamless MCP: register the `nodecoda` MCP server for the target agent so
+  // the agent gets build_dify_workflow with zero manual wiring. Best-effort:
+  // a registration failure never fails the install.
+  const reg = await registerMcp({ platform, scope, projectDir: process.cwd(), homeDir: homedir() });
+  for (const line of reg.lines) console.log(`  ${line}`);
+  console.log(`  ${c.dim}next: restart your agent so it loads the new skill and the MCP server.${c.reset}`);
+  return 0;
+}
+
+// `nodecoda-skill mcp-register [target]` — register (or repair) the MCP
+// server without reinstalling the skill. Uses the same platform detection as
+// `add`. `--claude-bin <path>` overrides the claude CLI used for registration.
+async function cmdMcpRegister(rest) {
+  const claudeIdx = rest.indexOf('--claude-bin');
+  const claudeBin = claudeIdx >= 0 ? rest[claudeIdx + 1] : 'claude';
+  const target = rest.find((a) => !a.startsWith('--'));
+  const { manifest } = await loadManifest('nodecoda-workflow');
+
+  let platform, scope;
+  if (target && PLATFORM_DIRS[target]) {
+    platform = target; scope = 'home';
+  } else if (target && (target.startsWith('/') || target.startsWith('~') || target.startsWith('.'))) {
+    const p = resolve(process.cwd(), target.replace(/^~/, homedir()));
+    platform = platformFromPath(p);
+    scope = p.startsWith(homedir()) ? 'home' : 'project';
+    if (!platform) die(`cannot infer agent platform from path '${target}'`);
+  } else {
+    const picked = detectPlatform(process.cwd(), manifest.platforms);
+    platform = picked.platform; scope = picked.scope;
+  }
+
+  const reg = await registerMcp({ platform, scope, projectDir: process.cwd(), homeDir: homedir(), claudeBin });
+  for (const line of reg.lines) console.log(`  ${line}`);
+  console.log(`  ${c.dim}next: restart your agent so it connects to the nodecoda MCP server.${c.reset}`);
   return 0;
 }
 
@@ -264,14 +348,19 @@ function help() {
     `  nodecoda-skill project <cmd> [args]      Project Mode: init/get-state/set-state/resolve/validate-transition`,
     `  nodecoda-skill save-build <build_id>     Save a build record + artifact locally`,
     `  nodecoda-skill mcp --http [--port N]       Serve MCP Streamable HTTP instead`,
+    `  nodecoda-skill mcp-register [target]       (Re)register MCP server (repair/upgrade)`,
     `  nodecoda-skill help                        Show this help`,
+    ``,
+    `Since v0.2.10, 'add'/'install' auto-registers the nodecoda MCP server for`,
+    `the target agent — agents gain build_dify_workflow with zero manual wiring.`,
     ``,
     `Targets for install: ${Object.keys(PLATFORM_DIRS).join(', ')} or any path`,
     ``,
     `Examples:`,
     `  nodecoda-skill install nodecoda-workflow`,
-    `  nodecoda-skill install nodecoda-workflow codex`,
+    `  nodecoda-skill install nodecoda-workflow codex         # user-wide (~/.codex/skills)`,
     `  nodecoda-skill install nodecoda-workflow ~/.claude/skills`,
+    `  nodecoda-skill mcp-register claude-code                # repair/re-register MCP`,
   ];
   console.log(lines.join('\n'));
   return 0;
@@ -297,6 +386,8 @@ try {
       code = await cmdValidate(rest[0]); break;
     case 'mcp':
       await cmdMcp(rest); break; // never returns; the server owns the process
+    case 'mcp-register':
+      code = await cmdMcpRegister(rest); break;
     case 'project':
       code = runScript('project.mjs', rest); break;
     case 'save-build':

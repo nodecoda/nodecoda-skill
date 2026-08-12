@@ -14,7 +14,7 @@
 //
 // Exit codes: 0=ok, 1=failure, 2=env error.
 
-import { readFile, readdir, mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { readFile, readdir, mkdtemp, mkdir, rm, writeFile, chmod } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { existsSync } from 'node:fs';
@@ -345,26 +345,36 @@ async function smokeCliInstall() {
     // into the detection (deterministic on any machine).
     const cleanEnv = { ...process.env, HOME: join(tmp, 'fakehome') };
     for (const k of ['CODEX_HOME', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_HOME', 'GEMINI_CACHE_DIR']) delete cleanEnv[k];
+    // Fake `claude` on PATH so the MCP auto-registration side effect of `add`
+    // never touches a real Claude Code config and stays fast/deterministic.
+    const fakeBin = join(tmp, 'bin');
+    await mkdir(fakeBin, { recursive: true });
+    await writeFile(join(fakeBin, 'claude'), '#!/bin/sh\necho "$@" >> "' + join(tmp, 'claude.log') + '"\nexit 0\n');
+    await chmod(join(fakeBin, 'claude'), 0o755);
+    cleanEnv.PATH = `${fakeBin}:${cleanEnv.PATH ?? ''}`;
     const cli = join(REPO_ROOT, 'scripts/cli.mjs');
 
-    // 4a. no signals -> Codex fallback, project-local
+    // 4a. no signals -> Codex fallback, HOME-level (user-wide install)
     {
       const autoProj = join(tmp, 'auto');
       await mkdir(autoProj, { recursive: true });
       const autoRun = spawnSync(process.execPath, [cli, 'add', 'nodecoda-workflow'], { cwd: autoProj, env: cleanEnv, encoding: 'utf8' });
-      const codexAuto = existsSync(join(autoProj, '.codex', 'skills', 'nodecoda-workflow', 'SKILL.md'));
-      if (autoRun.status === 0 && codexAuto) ok('cli add (no target, no signals) falls back to project-local .codex');
-      else bad('cli add (no target, no signals) falls back to project-local .codex',
-        `status=${autoRun.status} codex=${codexAuto} out=${autoRun.stdout.slice(0, 120)}`);
+      const codexAuto = existsSync(join(cleanEnv.HOME, '.codex', 'skills', 'nodecoda-workflow', 'SKILL.md'));
+      const notProjectLocal = !existsSync(join(autoProj, '.codex'));
+      const codexMcp = existsSync(join(cleanEnv.HOME, '.codex', 'config.toml'));
+      if (autoRun.status === 0 && codexAuto && notProjectLocal && codexMcp) {
+        ok('cli add (no target, no signals) -> HOME-level .codex + MCP auto-registered');
+      } else bad('cli add (no target, no signals) -> HOME-level .codex + MCP auto-registered',
+        `status=${autoRun.status} home=${codexAuto} project=${!notProjectLocal} mcp=${codexMcp}`);
     }
 
-    // 4b. running inside a Claude Code session -> .claude
+    // 4b. running inside a Claude Code session -> HOME-level .claude (user scope)
     {
       const ccProj = join(tmp, 'cc');
       await mkdir(ccProj, { recursive: true });
       const ccRun = spawnSync(process.execPath, [cli, 'add', 'nodecoda-workflow'], { cwd: ccProj, env: { ...cleanEnv, CLAUDE_CODE_ENTRYPOINT: '/tmp/cc' }, encoding: 'utf8' });
-      const claudeCc = existsSync(join(ccProj, '.claude', 'skills', 'nodecoda-workflow', 'SKILL.md'));
-      if (ccRun.status === 0 && claudeCc) ok('cli add detects Claude Code session env (CLAUDE_CODE_ENTRYPOINT) -> .claude');
+      const claudeCc = existsSync(join(cleanEnv.HOME, '.claude', 'skills', 'nodecoda-workflow', 'SKILL.md'));
+      if (ccRun.status === 0 && claudeCc) ok('cli add detects Claude Code session env (CLAUDE_CODE_ENTRYPOINT) -> HOME-level .claude');
       else bad('cli add detects Claude Code session env', `status=${ccRun.status} claude=${claudeCc} out=${ccRun.stdout.slice(0, 120)}`);
     }
 
@@ -402,13 +412,16 @@ async function smokeCliInstall() {
         `status=${curRun.status} mdc=${mdc.slice(0, 80).replace(/\n/g, ' ')}`);
     }
 
-    // 6. install <name> codex lands in ./.codex/skills relative to cwd
+    // 6. install <name> codex lands in ~/.codex/skills (named platform = user-wide)
     const proj = join(tmp, 'proj');
     await mkdir(proj, { recursive: true });
-    const inst = spawnSync(process.execPath, [join(REPO_ROOT, 'scripts/cli.mjs'), 'install', 'nodecoda-workflow', 'codex'], { cwd: proj, encoding: 'utf8' });
-    const codexInstalled = existsSync(join(proj, '.codex', 'skills', 'nodecoda-workflow', 'SKILL.md'));
-    if (inst.status === 0 && codexInstalled) ok('cli install <name> codex targets ./.codex/skills');
-    else bad('cli install <name> codex targets ./.codex/skills', `status=${inst.status} out=${inst.stdout.slice(0, 200)} codexInstalled=${codexInstalled}`);
+    const homeForInstall = join(tmp, 'home2');
+    const instEnv = { ...process.env, HOME: homeForInstall, PATH: cleanEnv.PATH };
+    const inst = spawnSync(process.execPath, [join(REPO_ROOT, 'scripts/cli.mjs'), 'install', 'nodecoda-workflow', 'codex'], { cwd: proj, env: instEnv, encoding: 'utf8' });
+    const codexInstalled = existsSync(join(homeForInstall, '.codex', 'skills', 'nodecoda-workflow', 'SKILL.md'));
+    const codexMcpInstalled = existsSync(join(homeForInstall, '.codex', 'config.toml'));
+    if (inst.status === 0 && codexInstalled && codexMcpInstalled) ok('cli install <name> codex targets ~/.codex/skills + MCP config');
+    else bad('cli install <name> codex targets ~/.codex/skills + MCP config', `status=${inst.status} out=${inst.stdout.slice(0, 200)} codexInstalled=${codexInstalled} mcp=${codexMcpInstalled}`);
 
     // 7. validate exits 0
     const val = spawnSync(process.execPath, [join(REPO_ROOT, 'scripts/cli.mjs'), 'validate'], { cwd: REPO_ROOT, encoding: 'utf8' });

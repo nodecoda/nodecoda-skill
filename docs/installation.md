@@ -20,28 +20,36 @@
 npx -y @nodecoda/skill add nodecoda-workflow
 ```
 
-CLI（`nodecoda-skill`，发布为 `@nodecoda/skill`）会自动识别当前代理的 skill 目录并复制过去。**同一个包还兼任 MCP server**（`nodecoda-skill mcp`）——安装 skill 和零安装接 MCP，一个包全搞定。
+CLI（`nodecoda-skill`，发布为 `@nodecoda/skill`）会自动识别当前代理的 skill 目录并复制过去，**并自动注册 `nodecoda` MCP server**（v0.2.10+）：
+
+- **Claude Code**：执行 `claude mcp add nodecoda --scope user -- npx -y @nodecoda/skill mcp`（写 `~/.claude.json`，全局生效）
+- **Codex**：向 `~/.codex/config.toml` 追加 `[mcp_servers.nodecoda]`（`command = "npx"`，零安装）
+- **Gemini CLI**：向 `~/.gemini/settings.json` 合并 `mcpServers.nodecoda`
+- **Cursor**：向 `.cursor/mcp.json` 合并 `mcpServers.nodecoda`
+
+装完 agent 直接拥有 `build_dify_workflow` / `get_workflow_build` / `cancel_workflow_build` 三个工具，无需任何手动接线。MCP 注册是幂等的（已注册就跳过）且**绝不阻断安装**——失败只打警告并给出手动命令。
 
 指定目标的写法：
 
 ```bash
 npx -y @nodecoda/skill add nodecoda-workflow              # 自动：探测当前代理（见下）
-npx -y @nodecoda/skill add nodecoda-workflow codex        # ./.codex/skills
-npx -y @nodecoda/skill add nodecoda-workflow claude-code  # ./.claude/skills
-npx -y @nodecoda/skill add nodecoda-workflow cursor       # 生成 .cursor/rules/*.mdc
+npx -y @nodecoda/skill add nodecoda-workflow codex        # 用户级：~/.codex/skills + config.toml
+npx -y @nodecoda/skill add nodecoda-workflow claude-code  # 用户级：~/.claude/skills + claude mcp add
+npx -y @nodecoda/skill add nodecoda-workflow cursor       # 生成 .cursor/rules/*.mdc + .cursor/mcp.json
 npx -y @nodecoda/skill add nodecoda-workflow ~/.claude/skills   # 显式指定目录
+npx -y @nodecoda/skill mcp-register <target>              # 只注册/修复 MCP，不重装 skill
 npx -y @nodecoda/skill list / info / validate             # 查看与自检
 ```
 
 `install` 是 `add` 的别名。平台差异已处理：Codex / Claude Code / Gemini CLI 走 `SKILL.md` 搜索目录；**Cursor 是例外**——它读不了 `SKILL.md`，所以 `add ... cursor`（或自动探测到 Cursor 项目时）会生成一个 `.cursor/rules/nodecoda-workflow.mdc`（YAML frontmatter + 内联 skill 内容）。
 
-**不带目标的 `add` 按这个顺序探测平台：**
-1. 调用 CLI 的代理会话（`CODEX_HOME` / `CLAUDE_CODE_ENTRYPOINT` / `CLAUDE_CODE_HOME` / `GEMINI_CACHE_DIR`）
-2. 当前项目里已配置的代理（存在 `.codex/`、`.claude/`、`.gemini/`、`.cursor/` 目录）
-3. 主目录里配置过的代理
-4. 兜底：Codex，项目级（`./.codex/skills`）
+**不带目标的 `add` 按这个顺序探测平台与层级：**
+1. 调用 CLI 的代理会话（`CODEX_HOME` / `CLAUDE_CODE_ENTRYPOINT` / `CLAUDE_CODE_HOME` / `GEMINI_CACHE_DIR`）→ **用户级**（装到 `~/.claude/skills` 等，全局生效）
+2. 当前项目里已配置的代理（存在 `.codex/`、`.claude/`、`.gemini/`、`.cursor/` 目录）→ **项目级**（`<项目>/.claude/skills`，MCP 也按项目 scope 注册）
+3. 主目录里配置过的代理 → **用户级**
+4. 兜底：Codex，用户级（`~/.codex/skills`）
 
-装完记得**重启代理**，让它加载新 skill。
+显式给平台名（如 `add ... codex`）一律装到**用户级**；给目录则精确落到该目录。装完记得**重启代理**，让它加载新 skill 并连上 MCP server。
 
 ## 方式 B — git clone 手动装（不用 CLI）
 
@@ -60,6 +68,8 @@ ls "$DEST"      # 应该能看到 SKILL.md、manifest.json、references/、examp
 ```
 
 ## 接 MCP
+
+> v0.2.10+ 的 `add`/`install` **已自动完成接线**（见上表），这一节留给手动配置 / 自定义端点 / 排障。
 
 ### Codex CLI 的接线
 
@@ -139,6 +149,10 @@ cp -R nodecoda-skill/skills/nodecoda-workflow ~/.claude/skills/
 rm -rf ~/.claude/skills/nodecoda-workflow    # Claude Code
 rm -rf .codex/skills/nodecoda-workflow        # Codex
 rm -f  .cursor/rules/nodecoda-workflow.mdc    # Cursor
+
+# 顺手移除自动注册的 MCP server（可选）
+claude mcp remove nodecoda                    # Claude Code
+# Codex: 删掉 ~/.codex/config.toml 里的 [mcp_servers.nodecoda] 段
 ```
 
 重启代理，清掉缓存的上下文。

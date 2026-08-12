@@ -90,7 +90,8 @@ flowchart LR
 ## 快速开始 — 30 秒
 
 ```bash
-# 1. 安装 skill（自动探测 Codex / Claude Code / Gemini / Cursor）
+# 1. 安装 skill（自动探测 Codex / Claude Code / Gemini / Cursor，
+#    并自动注册 nodecoda MCP server——装完即有 build_dify_workflow 三个工具）
 npx -y @nodecoda/skill add nodecoda-workflow
 
 # 2. 获取 API Key，然后交给你的代理
@@ -140,7 +141,7 @@ function main(string query) -> string {
 npx -y @nodecoda/skill add nodecoda-workflow
 ```
 
-CLI 会自动识别你正在用的代理（Codex、Claude Code、Gemini CLI、Cursor）并落到正确位置。也可以显式指定：`add nodecoda-workflow codex`、`... claude-code`、`... gemini-cli`、`... cursor`，或直接给任意目录。
+CLI 会自动识别你正在用的代理（Codex、Claude Code、Gemini CLI、Cursor）并落到正确位置——**同时自动注册 `nodecoda` MCP server**（Claude Code 走 `claude mcp add`、Codex 走 `config.toml`、Gemini 走 `settings.json`、Cursor 走 `.cursor/mcp.json`），装完 agent 直接拥有 `build_dify_workflow` 三个工具，零手动接线。指定平台名时装到用户级（`~/.claude/skills`、`~/.codex/skills`…）；给目录则精确落到该目录。想单独修复 MCP 接线：`npx -y @nodecoda/skill mcp-register <target>`。
 
 ### 方式 B — 手动
 

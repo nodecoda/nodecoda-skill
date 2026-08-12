@@ -1,6 +1,6 @@
 {
   "name": "@nodecoda/skill",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "description": "AI agent skills for NodeCoda — teach coding agents to author .ncoda Source and use the NodeCoda MCP service",
   "license": "Apache-2.0",
   "type": "module",
@@ -22,7 +22,8 @@
     "CHANGELOG.md",
     "scripts/mcp-core.mjs",
     "scripts/mcp-http-server.mjs",
-    "NOTICE"
+    "NOTICE",
+    "scripts/mcp-register.mjs"
   ],
   "keywords": [
     "nodecoda",
@@ -50,15 +51,16 @@
   "scripts": {
     "lint": "node scripts/validate-skill.mjs",
     "validate": "node scripts/validate-skill.mjs",
-    "test": "node scripts/test-contract.mjs && node scripts/test-stdio-framing.mjs && node scripts/test-project.mjs && node scripts/test-http-server.mjs && node scripts/test-save-build.mjs && node scripts/test-live-mcp.mjs && bash scripts/test-agent-detect.sh",
+    "test": "node scripts/test-contract.mjs && node scripts/test-mcp-register.mjs && node scripts/test-stdio-framing.mjs && node scripts/test-project.mjs && node scripts/test-http-server.mjs && node scripts/test-save-build.mjs && node scripts/test-live-mcp.mjs && bash scripts/test-agent-detect.sh",
     "test:contract": "node scripts/test-contract.mjs",
     "test:project": "node scripts/test-project.mjs",
-    "test:all": "node scripts/test-contract.mjs && node scripts/test-stdio-framing.mjs && node scripts/test-project.mjs && node scripts/validate-skill.mjs && node scripts/validate-project.mjs examples/project && node scripts/test-http-server.mjs && node scripts/test-save-build.mjs && node scripts/test-live-mcp.mjs && bash scripts/test-agent-detect.sh",
+    "test:all": "node scripts/test-contract.mjs && node scripts/test-mcp-register.mjs && node scripts/test-stdio-framing.mjs && node scripts/test-project.mjs && node scripts/validate-skill.mjs && node scripts/validate-project.mjs examples/project && node scripts/test-http-server.mjs && node scripts/test-save-build.mjs && node scripts/test-live-mcp.mjs && bash scripts/test-agent-detect.sh",
     "cli": "node scripts/cli.mjs",
     "test:http": "node scripts/test-http-server.mjs",
     "test:live-mcp": "node scripts/test-live-mcp.mjs",
     "test:stdio-framing": "node scripts/test-stdio-framing.mjs",
-    "test:agent-detect": "bash scripts/test-agent-detect.sh"
+    "test:agent-detect": "bash scripts/test-agent-detect.sh",
+    "test:mcp-register": "node scripts/test-mcp-register.mjs"
   },
   "bin": {
     "nodecoda-skill": "scripts/cli.mjs"

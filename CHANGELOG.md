@@ -9,6 +9,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 （进行中；下次发布时归档。）
 
+## [0.2.10] — 2026-08-12
+
+### Added - Seamless MCP auto-registration（真正"无感"接线）
+
+`add`/`install` 之前只复制 skill 文件，**不注册 MCP server**——agent 拿不到
+`build_dify_workflow` 三个工具，只能靠 SKILL.md 里的 npx 命令绕路。v0.2.10 起
+装完 skill 后自动为当前代理注册 `nodecoda` MCP server：
+
+- **Claude Code** — `claude mcp add nodecoda --scope user|project -- npx -y @nodecoda/skill mcp`（走官方 CLI，写 `~/.claude.json` 或 `.mcp.json`）
+- **Codex** — 向 `~/.codex/config.toml`（或项目 `config.toml`）幂等追加 `[mcp_servers.nodecoda]`（零安装 stdio：`command = "npx"`）
+- **Gemini CLI** — 向 `~/.gemini/settings.json` 合并 `mcpServers.nodecoda`
+- **Cursor** — 向 `.cursor/mcp.json` 合并 `mcpServers.nodecoda`
+
+注册逻辑（`scripts/mcp-register.mjs`）幂等、失败不阻断安装（只警告并给出手动
+命令）。新增 `nodecoda-skill mcp-register <target>` 子命令，可单独修复/重注册。
+
+### Changed - `add` 的落位层级：环境会话 → 用户级
+
+- 代理会话内执行 `add`（如 Claude Code 会话）→ 装到**用户级**（`~/.claude/skills`），
+  而不是当前项目的 `.claude/skills`——"装一次，处处可用"；
+- 项目里已有该代理目录（`.claude/`、`.codex/` 等）→ 仍是**项目级**（MCP 也按
+  project scope 注册）；
+- 无信号兜底 → Codex 用户级（`~/.codex/skills`，此前是项目级）；
+- 显式指定平台名（`add ... codex`）→ 用户级；显式目录 → 精确落位。
+
+### Fixed - 旧版 skill 命令不可用
+
+0.2.0 的 SKILL.md 用的是 `node scripts/project.mjs ...`（脚本只在 npm 包根，
+skill 目录里没有），导致装在 `~/.claude/skills` 的旧 skill 报
+`Cannot find module .../scripts/project.mjs`。0.2.8+ 已全量改为 npx 形式，
+`add` 重装即可修复；本版再加 MCP 自动注册，装完两条腿都齐。
+
+### Tests
+
+- `scripts/test-mcp-register.mjs` — 47 项：TOML/JSON 幂等合并、假 claude CLI
+  参数断言（`--scope user|project`）、路径推断、`registerMcp` 编排；
+- `test-agent-detect.sh` 更新为 10 项：用户级/项目级落位 + MCP 副作用断言；
+- `test-contract.mjs` 的 `smokeCliInstall` 同步新语义（假 HOME + 假 claude，
+  不碰真实配置）。
+- 全套 170 项检查绿。
+
 ## [0.2.9] — 2026-08-12
 
 ### Fixed - npm tarball: `validate-skill.mjs` now ships

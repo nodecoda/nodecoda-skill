@@ -16,9 +16,9 @@ description: Use when designing, writing, building, diagnosing, or revising Node
 
 做法：
 
-1. 在用户项目目录执行 `npx -y @nodecoda/skill add nodecoda-workflow`（自动探测 Codex / Claude Code / Gemini CLI / Cursor 并落位）；
-2. 提醒用户**重启 agent 会话**让 skill 生效，然后让用户重新发起原请求；
-3. MCP 未接线时补配置：`npx -y @nodecoda/skill mcp`（零安装），或按 `docs/installation.md` / `.codex/config.example.toml` 模板接线；
+1. 在用户项目目录执行 `npx -y @nodecoda/skill add nodecoda-workflow`（自动探测 Codex / Claude Code / Gemini CLI / Cursor 并落位，**并自动注册 `nodecoda` MCP server**——装完 agent 直接拥有 `build_dify_workflow` 等三个工具，无需手动接线）；
+2. 提醒用户**重启 agent 会话**让 skill 与 MCP server 生效，然后让用户重新发起原请求；
+3. 若工具仍缺失（MCP 未接上），用 `npx -y @nodecoda/skill mcp-register <target>` 修复，或按 `docs/installation.md` / `.codex/config.example.toml` 手动接线；
 4. **不要假装已具备能力**：工具缺失时报告安装指引，而不是绕过 MCP 猜测行为。
 
 ## 核心边界
