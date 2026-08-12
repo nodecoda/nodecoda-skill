@@ -58,3 +58,47 @@
 3. **契约类**：`mcp-core.mjs` / 部署变更 → 同步 `mcp-contract.md` / `public-service.md`。
 4. **索引**：增删文件时同步 `README.md` 与 manifest.json `references`。
 5. **校验**：`node scripts/validate-skill.mjs` 必须通过（含 manifest references 与磁盘文件一致性）。
+
+## 4. 语言包（machine-readable，`../language-pack/`）
+
+`references/*.md` 面向人读；`skills/<skill>/language-pack/` 是其**同源结构化数据**，
+面向 agent 检索与程序校验。二者必须保持版本一致。
+
+### 4.1 目录结构
+
+```text
+skills/nodecoda-workflow/language-pack/
+  version.json                      # language/pack_version/source_docs/hashes/source_hashes
+  grammar.ebnf                      # 带 [feature] 标签的 EBNF
+  builtins.json                     # 内置函数签名/效应/输出字段/retry 支持
+  diagnostics.json                  # 诊断分类（L1-L4）+ 实证 code→修复
+  targets/dify-1.16-graphon-0.6.json# 能力矩阵 supported/partial/unsupported + capability gate
+  antipatterns.json                 # G1-G8 反模式（id/codes/symptom/cause/correct）
+```
+
+### 4.2 数据来源（每份文件对应 source_docs）
+
+| 语言包文件 | 来源 references 文档 |
+|---|---|
+| `grammar.ebnf` | `grammar-reference.md` |
+| `builtins.json` | `language-reference.md` §8、`target-capabilities.md` |
+| `diagnostics.json` | `diagnostics.md`、`diagnostics-map.md` |
+| `targets/dify-1.16-graphon-0.6.json` | `target-capabilities.md` |
+| `antipatterns.json` | `gotchas.md` |
+
+### 4.3 格式与 hash 规则
+
+- JSON 文件 hash = **递归排序键**后 compact 序列化的 sha256（与编译器侧 Python
+  `json.dumps(sort_keys=True, separators=(',',':'))` 同算法，跨语言一致）；
+- `grammar.ebnf` hash = 原始文本 sha256；
+- `source_hashes` = 每个 source_doc 原文 sha256，用于**版本漂移检测**：
+  任一源文档变更而未重生成语言包时，`validate-language-pack.mjs` 必须报错。
+
+### 4.4 维护规则
+
+1. 修改 `references/` 中任一 source_doc → **必须同步重提取语言包并重算 version.json**；
+2. 新增诊断码/反模式 → 同时回写 `diagnostics-map.md`/`gotchas.md` 与
+   `diagnostics.json`/`antipatterns.json`；
+3. 目标能力变更 → 同步 `target-capabilities.md` 与 `targets/*.json`；
+4. 校验：`node scripts/validate-language-pack.mjs`（`npm run validate` 已包含），
+   回归：`node scripts/test-language-pack.mjs`（含漂移检测用例）。

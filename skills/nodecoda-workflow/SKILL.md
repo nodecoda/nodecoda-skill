@@ -96,6 +96,17 @@ function main(string query) -> string {
 - 不确定的语法查语言参考，不凭经验创造语法；
 - `answer`、`output`、`return`、`code`、`source` 等保留字不作变量名。
 
+**语言包检索（推荐）**：写 Source 前按本次特性（如 `chat`/`parallel`/`ffi`/`retry`）从
+`language-pack/` 检索**最小规则集**，而不是整卷手册无差别塞进上下文：
+
+- `language-pack/grammar.ebnf` — 带 `[feature]` 标签的产生式，只取相关切片；
+- `language-pack/builtins.json` — 内置函数签名、效应、输出字段、retry 支持；
+- `language-pack/targets/dify-1.16-graphon-0.6.json` — 能力矩阵：`supported`/`partial`/`unsupported`；
+- `language-pack/diagnostics.json` + `antipatterns.json` — 诊断分类与实证反模式（报错先对号）。
+
+这些 JSON 与 `references/*.md` 同源；任一源文档变更后必须重生成语言包（见
+`docs/references-convention.md` §4），否则 `validate-language-pack.mjs` 会因版本漂移报错。
+
 ### 3. 提交 Workflow Build
 
 每份新 Source 或修订后的 Source 调用一次 `build_dify_workflow`：
@@ -190,6 +201,7 @@ node scripts/save-build.mjs <build_id> --source builds/<build_id>/<source_filena
 ## 参考
 
 - [References 索引](references/README.md)
+- [机器可读语言包](language-pack/) — grammar/builtins/diagnostics/targets/antipatterns 结构化数据（feature 检索优先用这里）
 - [文法参考 (EBNF)](references/grammar-reference.md) — 语法合法性先查这里
 - [NodeCoda Workflow Language 参考](references/language-reference.md)
 - [目标能力矩阵](references/target-capabilities.md)
