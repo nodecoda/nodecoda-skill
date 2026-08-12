@@ -56,6 +56,22 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+  smoke-npx:
+    name: Smoke npx install from the published package
+    needs: [verify, publish-npm]
+    runs-on: ubuntu-latest
+    steps:
+      - name: npx add + version parity
+        run: |
+          VER="${{ needs.verify.outputs.skill-version }}"
+          # npm CDN propagation can lag the publish by seconds; retry.
+          for i in $(seq 1 6); do
+            if npx -y "@nodecoda/skill@$VER" add nodecoda-workflow codex; then break; fi
+            sleep 10
+          done
+          test -f .codex/skills/nodecoda-workflow/SKILL.md
+          node -e "const m=require('./.codex/skills/nodecoda-workflow/manifest.json'); if (m.version !== process.argv[1]) { console.error('manifest version mismatch', m.version); process.exit(1); }" "$VER"
+
   github-release:
     name: GitHub Release with npm tarball
     needs: verify
