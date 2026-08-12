@@ -93,7 +93,8 @@ flowchart LR
 # 1. 安装 skill（自动探测 Codex / Claude Code / Gemini / Cursor）
 npx -y @nodecoda/skill add nodecoda-workflow
 
-# 2. 配置 API Key
+# 2. 获取 API Key，然后交给你的代理
+#    登录 https://www.nodecoda.com → API Keys → 创建（sk-...）
 export NODECODA_KEY=sk-...   # 写进你的 shell profile
 
 # 3. 直接吩咐它，例如：
@@ -160,9 +161,9 @@ cp -R nodecoda-skill/skills/nodecoda-workflow <skill-search-path>/nodecoda-workf
 
 - **零安装** — `npx -y @nodecoda/skill mcp`（stdio，`--http` 可切 Streamable HTTP）。不用 clone、不用本地安装
 - **公网直连** — `https://www.nodecoda.com/mcp`；Key 从 `NODECODA_KEY` 读取，绝不落盘
-- **自托管 / 本地开发** — `.codex/config.example.toml` 自带三种模板：本地 HTTP server、本地 dev stack、stdio bridge
+- **自托管 / 本地开发** — [`.codex/config.example.toml`](https://github.com/nodecoda/nodecoda-skill/blob/main/.codex/config.example.toml) 自带三种模板：本地 HTTP server、本地 dev stack、stdio bridge
 
-各代理的安装路径和 Cursor 的 `.mdc` 细节见 **[docs/installation.md](docs/installation.md)**。
+各代理的安装路径和 Cursor 的 `.mdc` 细节见 **[docs/installation.md](https://github.com/nodecoda/nodecoda-skill/blob/main/docs/installation.md)**。
 
 ## 兼容性
 

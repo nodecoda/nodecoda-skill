@@ -102,7 +102,8 @@ fix-and-retry loop until you get a Dify-ready artifact.
 # 1. install the skill (auto-detects Codex / Claude Code / Gemini / Cursor)
 npx -y @nodecoda/skill add nodecoda-workflow
 
-# 2. give it a key
+# 2. get a key, then give it to your agent
+#    Sign in at https://www.nodecoda.com → API Keys → create (sk-...)
 export NODECODA_KEY=sk-...   # add to your shell profile
 
 # 3. just ask:
@@ -172,9 +173,9 @@ cp -R nodecoda-skill/skills/nodecoda-workflow <skill-search-path>/nodecoda-workf
 
 - **Zero-install** — `npx -y @nodecoda/skill mcp` (stdio, or `--http` for Streamable HTTP). No clone, no local install.
 - **Public endpoint** — `https://www.nodecoda.com/mcp`; the key is read from `NODECODA_KEY` and never written to disk.
-- **Self-host / local dev** — `.codex/config.example.toml` ships templates for a local HTTP server, a local dev stack, and a stdio bridge.
+- **Self-host / local dev** — [`.codex/config.example.toml`](https://github.com/nodecoda/nodecoda-skill/blob/main/.codex/config.example.toml) ships templates for a local HTTP server, a local dev stack, and a stdio bridge.
 
-Per-agent paths and the Cursor `.mdc` details: **[docs/installation.md](docs/installation.md)**.
+Per-agent paths and the Cursor `.mdc` details: **[docs/installation.md](https://github.com/nodecoda/nodecoda-skill/blob/main/docs/installation.md)**.
 
 ## Compatibility
 
