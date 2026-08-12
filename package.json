@@ -1,6 +1,6 @@
 {
   "name": "@nodecoda/skill",
-  "version": "0.2.15",
+  "version": "0.2.16",
   "description": "AI agent skills for NodeCoda — teach coding agents to author .ncoda Source and use the NodeCoda MCP service",
   "license": "Apache-2.0",
   "type": "module",
@@ -49,12 +49,12 @@
     "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
-    "lint": "node scripts/validate-skill.mjs && node scripts/validate-language-pack.mjs",
-    "validate": "node scripts/validate-skill.mjs && node scripts/validate-language-pack.mjs",
-    "test": "node scripts/test-contract.mjs && node scripts/test-mcp-register.mjs && node scripts/test-stdio-framing.mjs && node scripts/test-project.mjs && node scripts/test-http-server.mjs && node scripts/test-save-build.mjs && node scripts/test-language-pack.mjs && node scripts/test-live-mcp.mjs && bash scripts/test-agent-detect.sh",
+    "lint": "node scripts/validate-skill.mjs && node scripts/validate-language-pack.mjs && node scripts/validate-examples.mjs",
+    "validate": "node scripts/validate-skill.mjs && node scripts/validate-language-pack.mjs && node scripts/validate-examples.mjs",
+    "test": "node scripts/test-contract.mjs && node scripts/test-examples.mjs && node scripts/test-mcp-register.mjs && node scripts/test-stdio-framing.mjs && node scripts/test-project.mjs && node scripts/test-http-server.mjs && node scripts/test-save-build.mjs && node scripts/test-language-pack.mjs && node scripts/test-live-mcp.mjs && bash scripts/test-agent-detect.sh",
     "test:contract": "node scripts/test-contract.mjs",
     "test:project": "node scripts/test-project.mjs",
-    "test:all": "node scripts/test-contract.mjs && node scripts/test-mcp-register.mjs && node scripts/test-stdio-framing.mjs && node scripts/test-project.mjs && node scripts/validate-skill.mjs && node scripts/validate-language-pack.mjs && node scripts/validate-project.mjs examples/project && node scripts/test-http-server.mjs && node scripts/test-save-build.mjs && node scripts/test-language-pack.mjs && node scripts/test-live-mcp.mjs && bash scripts/test-agent-detect.sh",
+    "test:all": "node scripts/test-contract.mjs && node scripts/test-examples.mjs && node scripts/test-mcp-register.mjs && node scripts/test-stdio-framing.mjs && node scripts/test-project.mjs && node scripts/validate-skill.mjs && node scripts/validate-language-pack.mjs && node scripts/validate-examples.mjs && node scripts/validate-project.mjs examples/project && node scripts/test-http-server.mjs && node scripts/test-save-build.mjs && node scripts/test-language-pack.mjs && node scripts/test-live-mcp.mjs && bash scripts/test-agent-detect.sh",
     "cli": "node scripts/cli.mjs",
     "test:http": "node scripts/test-http-server.mjs",
     "test:live-mcp": "node scripts/test-live-mcp.mjs",

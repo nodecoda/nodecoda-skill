@@ -8,6 +8,10 @@
 | `02-with-llm.ncoda` | 经典 LLM 调用 | `llm(model, { messages })` + `const` |
 | `03-parallel-branches.ncoda` | 命名并行 | `parallel { name: { yield } }` + 结果汇总 |
 | `04-code-node.ncoda` | Python FFI | `foreign code python3(...)` + 多输出结构体 |
+| `05-conditional-output.ncoda` | 条件分支 + 多输出 | `if / else if / else` + `output("key", value)` |
+| `06-error-handling.ncoda` | 错误处理 | `attempt/success/failure` + `with retry/timeout` |
+| `07-structured-extract.ncoda` | 结构化抽取 | `extract<T>` + 具名 record + 三元表达式 |
+| `08-tool-and-http.ncoda` | 工具 + HTTP + LLM 链 | `tool()` + `http()` + 模板字符串 |
 
 ## 用法
 
@@ -32,16 +36,18 @@
 agent 应当:
 1. 复制对应文件作为骨架
 2. 只改 `main` 函数体
-3. 不引入构造不在这 4 个示例里的写法(除非有明确需求且查过 `language-reference.md`)
+3. 不引入构造不在示例集里的写法(除非有明确需求且查过 `language-reference.md`)
+
+> 新增/修改示例文件必须通过 `node scripts/validate-examples.mjs`(结构化语法门)
+> 与 `node scripts/test-contract.mjs`(manifest/MCP 契约)。完整语法合法性以真实
+> Build pipeline 为准(e2e 冒烟见 `.github/workflows/e2e.yml`)。
 
 ## 后续添加
 
 按需补充更多模式:
-- 条件分支 + 多输出
-- 工具调用
-- HTTP + LLM 链
-- 多轮对话 (`@mode advanced-chat`)
-- 知识库检索
-- 结构化抽取
-- 错误处理 (`attempt` / `with retry`)
-- 会话变量
+- 多轮对话 (`@mode advanced-chat` + `answer()`)
+- 知识库检索 (`knowledge()` + `extract_text()` + `file<>` 类型)
+- 会话变量 (`@conversation`)
+- 循环与集合操作 (`for` + `split`/`filter`/`take`)
+- `parallel for` 并发控制
+- `enum` 声明与 `file<>` 文件类型

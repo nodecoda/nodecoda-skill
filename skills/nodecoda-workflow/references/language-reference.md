@@ -368,20 +368,20 @@ let page = http("GET", url, {}) with retry(max: 2, interval: 500ms);
 |---|---|---|
 | 最简 LLM | `main → llm → return` | `examples/01-hello-workflow.ncoda` |
 | 带输入的 LLM | `main(params) → llm → return` | `examples/02-with-llm.ncoda` |
-| 条件分支 | `if/else → return` | — |
+| 条件分支 | `if/else → return` | `examples/05-conditional-output.ncoda` |
 | Python 计算 | `foreign code python3 → return` | `examples/04-code-node.ncoda` |
-| HTTP + LLM | `http → llm → return` | — |
-| 工具调用 | `tool → llm → return` | — |
+| HTTP + LLM | `http → llm → return` | `examples/08-tool-and-http.ncoda` |
+| 工具调用 | `tool → llm → return` | `examples/08-tool-and-http.ncoda` |
 | 模板字符串 | `` `hello ${name}` `` | — |
 | 循环处理 | `for (item in items) { yield }` | — |
 | 并行执行 | `parallel { { a } { b } }` | `examples/03-parallel-branches.ncoda` |
 | 多轮对话 | `@mode advanced-chat` | — |
 | 会话状态 | `@conversation` 变量 | — |
-| 结构化抽取 | `extract<T>(...)` | — |
+| 结构化抽取 | `extract<T>(...)` | `examples/07-structured-extract.ncoda` |
 | RAG 问答 | `std.v1.rag_answer(...)` | — |
 | HTTP 摘要 | `std.v1.fetch_and_summarize(...)` | — |
-| 错误处理 | `attempt { success/failure }` | — |
-| 多输出 | `output("key", value)` | — |
+| 错误处理 | `attempt { success/failure }` | `examples/06-error-handling.ncoda` |
+| 多输出 | `output("key", value)` | `examples/05-conditional-output.ncoda` |
 | 列表操作 | `split/filter/take` | — |
 
 ---

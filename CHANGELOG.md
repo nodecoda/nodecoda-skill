@@ -7,7 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-（进行中；下次发布时归档。）
+### Added - 示例语法校验门 + 4 个新示例 (v0.2.16)
+
+**校验门（治理先行）**：
+
+- 新增 `scripts/validate-examples.mjs` — `.ncoda` 示例的结构化语法门，补上此前
+  只有头部检查的缺口：`@language`/`@mode` 头部与顺序、`@conversation` 必须位于
+  顶层声明之前（实证 G1）、全文件括号配平（模板串感知，Python source 块与
+  `${}` 插值不误报）、顶层声明形状（const/type/enum/function/code/@conversation）、
+  保留字禁止作声明名（实证 G8，覆盖 const/let/var/type/enum/function/code、
+  参数、循环变量、@conversation 变量）、模式感知语句检查（workflow 禁 `answer()`、
+  advanced-chat 禁 `output()`、`while` 必须带 `limit N`、`attempt` 必须含
+  success/failure 块）。
+- 新增 `scripts/test-examples.mjs` — 校验门自身回归（真实示例全过 + 10 个合成
+  坏样例被拒 + 5 个易误报的合法写法不被拒），接入 `npm test` / `test:all`。
+- `npm run lint` / `validate` 现同时跑 validate-skill + validate-language-pack +
+  validate-examples 三道门。
+
+**示例扩充（examples/ 4 → 8 个）**：
+
+- `05-conditional-output.ncoda` — 条件分支 + 命名多输出：`if/else if/else`、
+  比较运算、`output("key", value)`。
+- `06-error-handling.ncoda` — 错误处理：`attempt/success/failure` +
+  `with retry(max, interval), timeout(duration)` 操作策略叠加。
+- `07-structured-extract.ncoda` — 结构化抽取：`extract<T>` + 具名 record +
+  `.ok/.reason/.value` 检查 + 数组字段 + 三元表达式。
+- `08-tool-and-http.ncoda` — 工具 + HTTP + LLM 链：`tool()`、`http()`、
+  模板字符串 URL、结果字段访问。
+- `manifest.examples` 扩到 8 项；`examples/README.md` 表格与"后续添加"清单
+  同步（剩余 backlog：advanced-chat/知识库/会话变量/循环集合操作/parallel for/enum）；
+  `language-reference.md` §13 常见模式速查表补示例文件列（同步重算
+  language-pack `version.json` source_hash）。
+
 
 ## [0.2.14] — 2026-08-13
 

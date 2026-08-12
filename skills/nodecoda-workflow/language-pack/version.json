@@ -1,7 +1,7 @@
 {
   "language": "nodecoda/1",
   "pack_version": "1.0.0",
-  "generated_at": "2026-08-12T16:33:11Z",
+  "generated_at": "2026-08-13T00:00:00Z",
   "source_docs": [
     "references/grammar-reference.md",
     "references/language-reference.md",
@@ -20,7 +20,7 @@
   "note": "hashes = sha256 of sorted-key JSON (grammar.ebnf hashed as text); source_hashes = raw-text sha256 of each references/*.md source",
   "source_hashes": {
     "references/grammar-reference.md": "cb8434320461f8f0ad17d2d5c9cc135fea7a37a10a1d79b917427f61edd987c8",
-    "references/language-reference.md": "f3e110dde8c2bd313a1477b17736ed71faff0dd00b6f2bcffb09573c226a14d1",
+    "references/language-reference.md": "49dfcd6c9880632bafef007037094b5d1bf054ac68325c28b3c6dbdfa97a1e4d",
     "references/target-capabilities.md": "a4f39442aac99b6e44e5c882c23957354cef410203351e0fc81f34044f6c6315",
     "references/diagnostics.md": "dc5aaacbfb14ce3dba0c6a105d7ed4c157ae569b52e84ebfaa330aa6dc41a135",
     "references/diagnostics-map.md": "fb05d8bcda431f623f170208b1ef0b53acd25b6342d6c72c20d7a6343c610b48",
