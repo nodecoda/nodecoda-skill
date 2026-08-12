@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 （进行中；下次发布时归档。）
 
+## [0.2.12] — 2026-08-12
+
+### Fixed - MCP stdio 应答帧格式：回显客户端输入格式（Claude Code JSONL 兼容）
+
+Claude Code 2.1.132 的 MCP stdio 桥按**换行分隔 JSON（JSONL）**中继/解析，
+只接受 `{...}\n` 格式的应答；老式 LSP `Content-Length` 帧（正文无尾换行）
+永远不会被交付，导致 `claude mcp list` 对 `nodecoda` 报
+`Failed to connect`，agent 拿不到 `build_dify_workflow` 工具——"无感 MCP"
+因此从未真正生效。现代 MCP 规范（2025-11-25）与官方 SDK 的 stdio 传输
+同样使用 JSONL。
+
+修复：`scripts/mcp-stdio-server.mjs` 现在**回显客户端的输入帧格式**——
+`parseFrame` 为每条消息标记线格式（`jsonl`/`lsp`），`runStdioMcp` 按首个
+消息的格式切换应答帧。Claude Code（JSONL）收到 JSONL 应答，秒连；
+Codex/Gemini/Cursor 等 LSP 客户端保持 `Content-Length` 帧不变。
+不硬编码客户端名，新旧 SDK 客户端全部自适应。
+
+验证：`claude mcp list` 中 `nodecoda` 由 `✗ Failed to connect`
+变为 `✓ Connected`（同机对照：官方 filesystem 服务器、插件桥均 ✓，
+纯 LSP 应答的极简服务器 ✗）。framing 单测新增 kind 标记与 jsonl 输出
+回归（17 passed）。
+
 ## [0.2.11] — 2026-08-12
 
 ### Fixed - 显式目录的 scope 判定（home 前缀误判）

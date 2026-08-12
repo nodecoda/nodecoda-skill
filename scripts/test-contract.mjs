@@ -22,6 +22,7 @@ import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { parseFrame } from './mcp-stdio-server.mjs';
 import { validateProjectDir } from './validate-project.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -293,8 +294,17 @@ async function smokeCliMcpMixedFraming() {
   await sleep(2500);
   child.kill();
 
-  const frames = out.split(/Content-Length: \d+\r\n\r\n/).filter(Boolean);
-  const parsed = frames.map((f) => { try { return JSON.parse(f); } catch { return null; } }).filter(Boolean);
+  // Responses now echo each message's wire format (jsonl in -> jsonl out,
+  // lsp in -> lsp out), so parse BOTH framings out of the stream with the
+  // production parseFrame (LSP body + JSONL body may be glued in the buffer).
+  const parsed = [];
+  let buf = Buffer.from(out, 'utf8');
+  while (buf.length > 0) {
+    const f = parseFrame(buf);
+    if (!f) break;
+    buf = f.rest;
+    if (f.message) parsed.push(f.message);
+  }
   const byId = Object.fromEntries(parsed.map((p) => [p.id, p]));
   const initOk = byId[1]?.result?.serverInfo?.name?.includes('nodecoda');
   const listOk = [2, 3].every((id) => (byId[id]?.result?.tools ?? []).length === 3);
@@ -302,7 +312,7 @@ async function smokeCliMcpMixedFraming() {
     ok('mixed newline + Content-Length frames all answered in one stream');
   } else {
     bad('mixed newline + Content-Length frames all answered in one stream',
-      `frames=${frames.length} ids=${parsed.map((p) => p.id).join(',')} out=${out.slice(0, 300)}`);
+      `ids=${parsed.map((p) => p.id).join(',')} out=${out.slice(0, 300)}`);
   }
 }
 

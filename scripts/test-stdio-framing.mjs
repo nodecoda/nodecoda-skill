@@ -8,7 +8,7 @@
 // whenever no CRLFCRLF header block was present (dead code), and the partial-
 // header guard must never consume a buffered "Content-Length:" line as JSON.
 
-import { parseFrame, frameMessage } from './mcp-stdio-server.mjs';
+import { parseFrame, frameMessage, setOutputMode, getOutputMode, outputMode } from './mcp-stdio-server.mjs';
 
 let pass = 0, fail = 0;
 function ok(name) { console.log(`  \x1b[32m✓\x1b[0m ${name}`); pass++; }
@@ -126,6 +126,44 @@ const tools = { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} };
 }
 
 // ---- 11. partial JSON without terminator waits ----
+{
+  const f = parseFrame(Buffer.from('{"jsonrpc":"2.0","id":9'));
+  if (f === null) ok('incomplete JSON line (no newline yet) waits');
+  else bad('incomplete JSON line (no newline yet) waits', `parsed ${JSON.stringify(f?.message)}`);
+}
+
+// ---- 12. parseFrame tags the wire format (kind) ----
+{
+  const jsonl = Buffer.from(JSON.stringify(tools) + '\n');
+  const lsp = Buffer.from(frameMessage(tools));
+  const f1 = parseFrame(jsonl);
+  const f2 = parseFrame(lsp);
+  if (f1?.kind === 'jsonl' && f2?.kind === 'lsp') ok('parseFrame tags jsonl vs lsp wire format');
+  else bad('parseFrame tags jsonl vs lsp wire format', `jsonl.kind=${f1?.kind} lsp.kind=${f2?.kind}`);
+}
+
+// ---- 13. jsonl output mode round-trips and newline-terminates ----
+{
+  setOutputMode('jsonl');
+  const out = frameMessage(tools);
+  const f = parseFrame(Buffer.from(out));
+  setOutputMode('lsp');
+  if (out === JSON.stringify(tools) + '\n' && f && eq(f.message, tools) && f.kind === 'jsonl') {
+    ok('jsonl mode emits newline-terminated JSON that parseFrame round-trips');
+  } else bad('jsonl mode emits newline-terminated JSON that parseFrame round-trips', `out=${JSON.stringify(out)} f=${JSON.stringify(f?.message)} kind=${f?.kind}`);
+  if (getOutputMode() === 'lsp') ok('setOutputMode resets to lsp');
+  else bad('setOutputMode resets to lsp', `mode=${getOutputMode()}`);
+}
+
+// ---- 14. lsp mode unchanged after reset ----
+{
+  const out = frameMessage(tools);
+  if (out.startsWith('Content-Length:') && out.endsWith(JSON.stringify(tools))) {
+    ok('lsp mode still emits Content-Length frame (no trailing newline)');
+  } else bad('lsp mode still emits Content-Length frame (no trailing newline)', `out=${JSON.stringify(out)}`);
+}
+
+
 {
   const f = parseFrame(Buffer.from('{"jsonrpc":"2.0","id":9'));
   if (f === null) ok('incomplete JSON line (no newline yet) waits');

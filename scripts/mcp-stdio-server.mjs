@@ -51,8 +51,8 @@ export function parseFrame(buffer) {
   if (nl !== -1) {
     const first = buffer.slice(0, nl).toString('utf8').trim();
     if (first.startsWith('{') || first.startsWith('[')) {
-      try { return { message: JSON.parse(first), rest: buffer.slice(nl + 1) }; }
-      catch { return { message: null, rest: buffer.slice(nl + 1) }; }
+      try { return { message: JSON.parse(first), rest: buffer.slice(nl + 1), kind: 'jsonl' }; }
+      catch { return { message: null, rest: buffer.slice(nl + 1), kind: 'jsonl' }; }
     }
   }
   const headerEnd = buffer.indexOf('\r\n\r\n');
@@ -65,9 +65,9 @@ export function parseFrame(buffer) {
     if (nl === -1) return null;
     const line = buffer.slice(0, nl).toString('utf8').trim();
     if (/^[A-Za-z][A-Za-z0-9-]*\s*:/.test(line)) return null;
-    if (!line) return { message: null, rest: buffer.slice(nl + 1) };
-    try { return { message: JSON.parse(line), rest: buffer.slice(nl + 1) }; }
-    catch { return { message: null, rest: buffer.slice(nl + 1) }; }
+    if (!line) return { message: null, rest: buffer.slice(nl + 1), kind: 'jsonl' };
+    try { return { message: JSON.parse(line), rest: buffer.slice(nl + 1), kind: 'jsonl' }; }
+    catch { return { message: null, rest: buffer.slice(nl + 1), kind: 'jsonl' }; }
   }
   const header = buffer.slice(0, headerEnd).toString('ascii');
   let contentLength = null;
@@ -80,20 +80,46 @@ export function parseFrame(buffer) {
     const nl = buffer.indexOf('\n', headerEnd + 4);
     if (nl === -1) return null;
     const line = buffer.slice(headerEnd + 4, nl).toString('utf8').trim();
-    if (!line) return { message: null, rest: buffer.slice(nl + 1) };
-    try { return { message: JSON.parse(line), rest: buffer.slice(nl + 1) }; }
-    catch { return { message: null, rest: buffer.slice(nl + 1) }; }
+    if (!line) return { message: null, rest: buffer.slice(nl + 1), kind: 'jsonl' };
+    try { return { message: JSON.parse(line), rest: buffer.slice(nl + 1), kind: 'jsonl' }; }
+    catch { return { message: null, rest: buffer.slice(nl + 1), kind: 'jsonl' }; }
   }
   const bodyStart = headerEnd + 4;
   if (buffer.length < bodyStart + contentLength) return null;
   const body = buffer.slice(bodyStart, bodyStart + contentLength).toString('utf8');
   const rest = buffer.slice(bodyStart + contentLength);
-  try { return { message: JSON.parse(body), rest }; }
-  catch { return { message: null, rest }; }
+  try { return { message: JSON.parse(body), rest, kind: 'lsp' }; }
+  catch { return { message: null, rest, kind: 'lsp' }; }
+}
+
+// ---- response framing mode ---------------------------------------------
+// MCP stdio transports come in two generations: the legacy LSP-style
+// Content-Length framing and the current newline-delimited JSON (JSONL) used
+// by the modern MCP spec (2025-11-25) and Claude Code's stdio bridge. A
+// server must answer in the format the client speaks — Claude Code 2.1.132
+// only parses JSONL responses and times out on LSP frames (observed: plain
+// `Content-Length` frames -> "Failed to connect" in `claude mcp list`; a
+// JSONL responder connects instantly, same as the official plugin bridge).
+//
+// Fix: echo the client's input framing. We already parse both formats
+// (parseFrame), so tag each parsed message with its wire format and switch
+// the response framing to match. LSP-speaking clients (older SDKs, some
+// Codex/Gemini/Cursor builds) get LSP frames; JSONL-speaking clients get
+// JSONL. No hardcoded client names needed.
+
+export let outputMode = 'lsp'; // 'lsp' | 'jsonl'
+
+export function setOutputMode(mode) {
+  outputMode = mode === 'jsonl' ? 'jsonl' : 'lsp';
+}
+
+export function getOutputMode() {
+  return outputMode;
 }
 
 export function frameMessage(obj) {
   const body = JSON.stringify(obj);
+  if (outputMode === 'jsonl') return body + '\n';
   return `Content-Length: ${Buffer.byteLength(body, 'utf8')}\r\n\r\n${body}`;
 }
 
@@ -114,6 +140,7 @@ export function runStdioMcp() {
       if (!frame) return;
       buffer = frame.rest;
       if (!frame.message) continue;
+      if (frame.kind) outputMode = frame.kind === 'jsonl' ? 'jsonl' : 'lsp';
       const response = await handleMessage(frame.message);
       if (response) output.write(frameMessage(response));
     }
