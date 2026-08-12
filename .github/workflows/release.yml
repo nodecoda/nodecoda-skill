@@ -27,7 +27,7 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           REF_TYPE="${GITHUB_REF_TYPE}"
           SKILL_VER=$(node -p "require('./skills/nodecoda-workflow/manifest.json').version")
-          echo "skill-version=$SKILL_VER"
+          echo "skill-version=$SKILL_VER" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG"
           if [[ "$REF_TYPE" != "tag" ]]; then
             echo "::error::Release must be triggered by a v* version tag, not ref '$TAG' (ref_type=$REF_TYPE). Push a matching tag: git tag v$SKILL_VER && git push origin v$SKILL_VER"
