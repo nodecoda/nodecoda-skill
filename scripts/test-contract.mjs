@@ -142,6 +142,50 @@ function compareSemver(a, b) {
   return 0;
 }
 
+
+// ---- distribution completeness + tarball key content ----
+// Regression guard for the P0 we fixed: SKILL.md/README reference scripts
+// (project.mjs, save-build.mjs, ...) that MUST ship in the npm tarball.
+// Any script a shipped doc references, or that cli.mjs can execute, must be
+// present in the repo AND listed in package.json "files".
+async function checkDistributionCompleteness() {
+  const pkg = JSON.parse(await readFile(join(REPO_ROOT, 'package.json'), 'utf8'));
+  const files = new Set(pkg.files);
+  const refFiles = [
+    'skills/nodecoda-workflow/SKILL.md',
+    'README.md',
+    'README.zh-CN.md',
+    'docs/installation.md',
+    ...['mcp-contract', 'source-generation', 'language-reference', 'public-service',
+       'diagnostics', 'target-capabilities', 'iteration-loop', 'failure-modes',
+       'project-workflow'].map((f) => `skills/nodecoda-workflow/references/${f}.md`),
+  ];
+  const refs = new Set();
+  for (const f of refFiles) {
+    const txt = await readFile(join(REPO_ROOT, f), 'utf8');
+    for (const m of txt.matchAll(/scripts\/[a-zA-Z0-9._-]+\.(?:mjs|sh)/g)) refs.add(m[0]);
+  }
+  const missing = [...refs].filter((r) => !existsSync(join(REPO_ROOT, r)) || !files.has(r));
+  if (missing.length === 0) ok('distribution: scripts referenced by shipped docs exist and are in package.json files');
+  else bad('distribution: scripts referenced by shipped docs', `missing/not-shipped: ${missing.join(', ')}`);
+
+  // every script cli.mjs can execute (validate / mcp / project / save-build) must ship
+  const cli = await readFile(join(REPO_ROOT, 'scripts/cli.mjs'), 'utf8');
+  const cliRefs = [
+    ...[...cli.matchAll(/join\(__dirname,\s*'([^']+\.mjs)'\)/g)].map((m) => m[1]),
+    ...[...cli.matchAll(/import\('\.\/([^']+\.mjs)'\)/g)].map((m) => m[1]),
+  ];
+  const cliMissing = [...new Set(cliRefs)].filter((r) => !files.has(`scripts/${r}`) || !existsSync(join(REPO_ROOT, 'scripts', r)));
+  if (cliMissing.length === 0) ok('distribution: every script cli.mjs executes is shipped');
+  else bad('distribution: cli.mjs runtime deps', `not in package.json files: ${cliMissing.join(', ')}`);
+
+  // tarball key content: legal + bilingual docs + skill
+  const required = ['LICENSE', 'NOTICE', 'README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'skills/'];
+  const missingReq = required.filter((f) => !files.has(f));
+  if (missingReq.length === 0) ok('tarball: LICENSE + NOTICE + bilingual README + CHANGELOG + skill all ship');
+  else bad('tarball key content', `missing from files: ${missingReq.join(', ')}`);
+}
+
 // ---- main ----
 console.log('contract tests');
 if (!runValidator()) { console.log(`\nFAIL  ${fail} failed, ${pass} passed`); process.exit(1); }
@@ -149,6 +193,7 @@ await checkExamplesShape();
 await checkSkillMdConsistency();
 await checkReadmeInstallTable();
 await checkPackageVersion();
+await checkDistributionCompleteness();
 await smokeStdioMcp();
 await smokeCliMcp();
 await smokeCliMcpNewlineFallback();
@@ -374,6 +419,11 @@ async function smokeCliInstall() {
     const badCmd = spawnSync(process.execPath, [join(REPO_ROOT, 'scripts/cli.mjs'), 'bogus'], { cwd: REPO_ROOT, encoding: 'utf8' });
     if (badCmd.status !== 0 && /unknown subcommand/.test(badCmd.stderr)) ok('cli unknown subcommand fails with hint');
     else bad('cli unknown subcommand fails with hint', `status=${badCmd.status} err=${badCmd.stderr.slice(0, 150)}`);
+
+    // 9. info without a name fails with usage (no silent success)
+    const infoNoArg = spawnSync(process.execPath, [join(REPO_ROOT, 'scripts/cli.mjs'), 'info'], { cwd: REPO_ROOT, encoding: 'utf8' });
+    if (infoNoArg.status !== 0) ok('cli info without a name fails with usage');
+    else bad('cli info without a name fails with usage', 'status=0');
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }

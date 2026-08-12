@@ -1,0 +1,30 @@
+name: e2e
+
+on:
+  # Manual end-to-end verification against the live public deployment.
+  # Run from the Actions tab; requires the E2E_NODECODA_KEY repo secret
+  # (a real sk-... key from www.nodecoda.com). Not part of push/PR gating:
+  # it depends on the public service, and a key must exist in the backend DB.
+  workflow_dispatch:
+
+jobs:
+  live-build:
+    name: Real build against www.nodecoda.com
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Run live end-to-end workflow build
+        env:
+          NODECODA_KEY: ${{ secrets.E2E_NODECODA_KEY }}
+          NODECODA_POLL_TIMEOUT_MS: "120000"
+        run: |
+          if [ -z "$NODECODA_KEY" ]; then
+            echo "::error::E2E_NODECODA_KEY secret is not set — add a real sk-... key to repo secrets."
+            exit 1
+          fi
+          node scripts/live-mcp.mjs --source skills/nodecoda-workflow/examples/01-hello-workflow.ncoda
+          test -n "$(ls artifacts/*.yaml 2>/dev/null)" || { echo "::error::no artifact produced"; exit 1; }
+          echo "E2E OK: live build produced $(ls artifacts/*.yaml | head -1)"
