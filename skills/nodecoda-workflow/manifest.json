@@ -33,7 +33,7 @@
     "examples/03-parallel-branches.ncoda",
     "examples/04-code-node.ncoda"
   ],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "homepage": "https://github.com/nodecoda/nodecoda-skill",
   "repository": {
     "type": "git",
