@@ -49,3 +49,6 @@ CLAUDE.md
 # Generated build artifacts (saved via scripts/save-build.mjs)
 builds/
 .codex/
+
+# live-mcp.mjs output (real build artifacts, regenerable)
+artifacts/

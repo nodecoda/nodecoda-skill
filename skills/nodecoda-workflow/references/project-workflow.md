@@ -59,24 +59,24 @@ created_at: "2026-08-12T..."
 ## Commands
 
 ```bash
-# detect or create
-node scripts/project.mjs resolve
-node scripts/project.mjs init ./my-flow --project my-flow --mode workflow
+# detect or create (npx form works from anywhere; `node scripts/...` only if this repo is cloned)
+npx -y @nodecoda/skill project resolve
+npx -y @nodecoda/skill project init ./my-flow --project my-flow --mode workflow
 
 # state
-node scripts/project.mjs get-state ./my-flow
-node scripts/project.mjs set-state ./my-flow DESIGNED
-node scripts/project.mjs set-state ./my-flow BUILDING --build-id job_x
-node scripts/project.mjs set-state ./my-flow SUCCEEDED --sha256 <hash>
-node scripts/project.mjs set-state ./my-flow NEEDS_FIX --diagnostics '["err1"]'
+npx -y @nodecoda/skill project get-state ./my-flow
+npx -y @nodecoda/skill project set-state ./my-flow DESIGNED
+npx -y @nodecoda/skill project set-state ./my-flow BUILDING --build-id job_x
+npx -y @nodecoda/skill project set-state ./my-flow SUCCEEDED --sha256 <hash>
+npx -y @nodecoda/skill project set-state ./my-flow NEEDS_FIX --diagnostics '["err1"]'
 
 # validate
-node scripts/validate-project.mjs ./my-flow
+node scripts/validate-project.mjs ./my-flow   # (repo-only) or npm run validate
 ```
 
 ## Resume protocol
 
-On any session start inside a project dir, run `project.mjs get-state .` and continue from `phase`:
+On any session start inside a project dir, run `npx -y @nodecoda/skill project get-state .` and continue from `phase`:
 - CLARIFYING/DESIGNED: continue or finalize design.md
 - SOURCE_READY: submit build
 - BUILDING: poll `get_workflow_build` with `current_build_id`

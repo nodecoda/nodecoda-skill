@@ -29,12 +29,24 @@ import { readFile, writeFile, cp, mkdir, access } from 'node:fs/promises';
 import { existsSync, constants } from 'node:fs';
 import { join, resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
 const SKILLS_DIR = join(REPO_ROOT, 'skills');
+
+// Passthrough for Project Mode tooling: `nodecoda-skill project ...` and
+// `nodecoda-skill save-build ...` re-exec the repo-local scripts so they work
+// from anywhere via `npx -y @nodecoda/skill project ...` (the scripts ship in
+// the npm tarball; SKILL.md documents the npx form). Single source of truth:
+// the underlying scripts keep their own CLI and tests.
+function runScript(scriptName, args) {
+  const script = join(__dirname, scriptName);
+  const r = spawnSync(process.execPath, [script, ...args], { stdio: 'inherit' });
+  return r.status ?? 1;
+}
+
 
 const useColor = process.stdout.isTTY && !process.env.NO_COLOR;
 const c = {
@@ -249,6 +261,8 @@ function help() {
     `  nodecoda-skill add <name>                  Alias for install (npm-style)`,
     `  nodecoda-skill validate [name]             Run contract validation`,
     `  nodecoda-skill mcp                         Serve MCP over stdio (npx zero-install)`,
+    `  nodecoda-skill project <cmd> [args]      Project Mode: init/get-state/set-state/resolve/validate-transition`,
+    `  nodecoda-skill save-build <build_id>     Save a build record + artifact locally`,
     `  nodecoda-skill mcp --http [--port N]       Serve MCP Streamable HTTP instead`,
     `  nodecoda-skill help                        Show this help`,
     ``,
@@ -283,6 +297,11 @@ try {
       code = await cmdValidate(rest[0]); break;
     case 'mcp':
       await cmdMcp(rest); break; // never returns; the server owns the process
+    case 'project':
+      code = runScript('project.mjs', rest); break;
+    case 'save-build':
+    case 'save':
+      code = runScript('save-build.mjs', rest); break;
     case 'help':
     case '--help':
     case '-h':

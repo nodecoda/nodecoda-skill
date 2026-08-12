@@ -19,13 +19,13 @@ description: Use when designing, writing, building, diagnosing, or revising Node
 
 创建正式工作流时走项目模式：一个工作流 = 一个项目目录，`.ncoda` 源码可反复编译、版本化、共享。
 
-**探测与创建**：先 `node scripts/project.mjs resolve`--当前目录有 `nodecoda.yaml` 就就地复用；没有则默认新建 `./<name>/`（用一个问题确认，尊重用户想要就地的明确表达）。
+**探测与创建**：先 `npx -y @nodecoda/skill project resolve`（已 clone 本仓库也可用 `node scripts/project.mjs resolve`）--当前目录有 `nodecoda.yaml` 就就地复用；没有则默认新建 `./<name>/`（用一个问题确认，尊重用户想要就地的明确表达）。
 
 **精简澄清**：一次一问、意图优先（用途/输入输出/模式与依赖/边界与异常）、≤5 轮，结论落盘 `design.md`。需求已清晰可提前进入 DESIGNED。
 
-**生命周期状态机**：`INIT -> CLARIFYING -> DESIGNED -> SOURCE_READY -> BUILDING -> SUCCEEDED`；失败走 `NEEDS_FIX` 修复循环（≤5 次），成功后改源码可重新编译（`SUCCEEDED -> SOURCE_READY`，rev+1）。转换经 `project.mjs set-state` 校验。
+**生命周期状态机**：`INIT -> CLARIFYING -> DESIGNED -> SOURCE_READY -> BUILDING -> SUCCEEDED`；失败走 `NEEDS_FIX` 修复循环（≤5 次），成功后改源码可重新编译（`SUCCEEDED -> SOURCE_READY`，rev+1）。转换经 `npx -y @nodecoda/skill project set-state` 校验。
 
-**恢复**：会话中断后 `project.mjs get-state .` 回到对应阶段，不重问需求。
+**恢复**：会话中断后 `npx -y @nodecoda/skill project get-state .` 回到对应阶段，不重问需求。
 
 **产物保存**：SUCCEEDED 后 `save-build.mjs <build_id> --source src/<name>.ncoda --out builds` 落盘到 `builds/<build_id>/`。
 
