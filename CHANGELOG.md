@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 （进行中；下次发布时归档。）
 
+## [0.2.9] — 2026-08-12
+
+### Fixed - npm tarball: `validate-skill.mjs` now ships
+
+- `scripts/validate-skill.mjs` was missing from `package.json` `files`, so
+  `nodecoda-skill validate` inside the published package would fail (the CLI
+  re-execs it). Caught by the new distribution-completeness guard in the
+  contract suite; added to `files`.
+
+### Added - Test governance round
+
+- `scripts/test-save-build.mjs` — stub-backed coverage for the last shipped
+  script with zero tests (SUCCEEDED artifact+record+sha256, FAILED
+  record-only, missing key / missing build id). Wired into `npm test` /
+  `test:all`.
+- Contract suite: distribution-completeness guard (every script referenced by
+  shipped docs or executable by `cli.mjs` must exist and be in `files`),
+  tarball key-content check (LICENSE / NOTICE / bilingual README / CHANGELOG /
+  skill), CLI `info`-no-arg usage edge. Suite is now 118 checks.
+- `.github/workflows/e2e.yml` — manual `workflow_dispatch` job running a real
+  build against www.nodecoda.com (requires `E2E_NODECODA_KEY` secret); not in
+  push/PR gating.
+
 ## [0.2.8] — 2026-08-12
 
 ### Added - CLI Project Mode passthrough (npx-reachable project tooling)
