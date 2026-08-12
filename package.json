@@ -1,7 +1,7 @@
 {
   "name": "@nodecoda/skill",
   "version": "0.2.7",
-  "description": "AI agent skills for NodeCoda \u2014 teach coding agents to author .ncoda Source and use the NodeCoda MCP service",
+  "description": "AI agent skills for NodeCoda — teach coding agents to author .ncoda Source and use the NodeCoda MCP service",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
@@ -16,6 +16,7 @@
     "scripts/live-mcp.mjs",
     "scripts/mcp-stdio-server.mjs",
     "README.md",
+    "README.zh-CN.md",
     "LICENSE",
     "CHANGELOG.md",
     "scripts/mcp-core.mjs",

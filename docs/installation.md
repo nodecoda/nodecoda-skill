@@ -1,31 +1,76 @@
-# Installation
+# 安装与接线指南
 
-The `nodecoda-workflow` skill can be installed on any agent that follows the Claude Code skill convention. Pick the path that matches your agent.
+> 让 `nodecoda-workflow` skill 在你的代理里跑起来，顺便把 NodeCoda MCP 服务接好。
+> 30 秒入门版在 [README](../README.zh-CN.md)；这里是每个代理的完整细节。
 
-## Supported agents
+## 支持哪些代理？
 
-| Agent | Default skill path | Notes |
-|-------|--------------------|-------|
-| **Claude Code** | `~/.claude/skills/nodecoda-workflow/` | Or `<project>/.claude/skills/nodecoda-workflow/` for project-scoped |
-| **Codex CLI** | `.codex/skills/nodecoda-workflow/` | Project-scoped, lives next to AGENTS.md |
-| **Gemini CLI** | `~/.gemini/skills/nodecoda-workflow/` | (assumed; check `gemini --help` for current path) |
-| **Cursor** | `.cursor/rules/nodecoda.mdc` | Cursor doesn't load `SKILL.md` directly — see "Cursor" section below |
+任何遵循 **Claude Code skill 约定**的代理都能装。默认路径如下：
 
+| 代理 | 默认 skill 路径 | 备注 |
+|---|---|---|
+| **Claude Code** | `~/.claude/skills/nodecoda-workflow/` | 或项目级 `<project>/.claude/skills/nodecoda-workflow/` |
+| **Codex CLI** | `.codex/skills/nodecoda-workflow/` | 项目级，和 AGENTS.md 放一起 |
+| **Gemini CLI** | `~/.gemini/skills/nodecoda-workflow/` | （假定路径；以 `gemini --help` 为准） |
+| **Cursor** | `.cursor/rules/nodecoda.mdc` | Cursor 不直接读 `SKILL.md`——见下文"Cursor 特殊情况" |
 
-## Codex MCP wiring (optional)
+## 方式 A — npx 一条命令（推荐）
 
-For Codex CLI, this repo ships `.codex/config.example.toml` - a template that
-registers the NodeCoda MCP server. The **primary** wiring is the public
-Streamable HTTP endpoint (`https://www.nodecoda.com/mcp`); the key is read from
-the `NODECODA_KEY` environment variable, so it never lives in a config file:
+```bash
+npx -y @nodecoda/skill add nodecoda-workflow
+```
+
+CLI（`nodecoda-skill`，发布为 `@nodecoda/skill`）会自动识别当前代理的 skill 目录并复制过去。**同一个包还兼任 MCP server**（`nodecoda-skill mcp`）——安装 skill 和零安装接 MCP，一个包全搞定。
+
+指定目标的写法：
+
+```bash
+npx -y @nodecoda/skill add nodecoda-workflow              # 自动：探测当前代理（见下）
+npx -y @nodecoda/skill add nodecoda-workflow codex        # ./.codex/skills
+npx -y @nodecoda/skill add nodecoda-workflow claude-code  # ./.claude/skills
+npx -y @nodecoda/skill add nodecoda-workflow cursor       # 生成 .cursor/rules/*.mdc
+npx -y @nodecoda/skill add nodecoda-workflow ~/.claude/skills   # 显式指定目录
+npx -y @nodecoda/skill list / info / validate             # 查看与自检
+```
+
+`install` 是 `add` 的别名。平台差异已处理：Codex / Claude Code / Gemini CLI 走 `SKILL.md` 搜索目录；**Cursor 是例外**——它读不了 `SKILL.md`，所以 `add ... cursor`（或自动探测到 Cursor 项目时）会生成一个 `.cursor/rules/nodecoda-workflow.mdc`（YAML frontmatter + 内联 skill 内容）。
+
+**不带目标的 `add` 按这个顺序探测平台：**
+1. 调用 CLI 的代理会话（`CODEX_HOME` / `CLAUDE_CODE_ENTRYPOINT` / `CLAUDE_CODE_HOME` / `GEMINI_CACHE_DIR`）
+2. 当前项目里已配置的代理（存在 `.codex/`、`.claude/`、`.gemini/`、`.cursor/` 目录）
+3. 主目录里配置过的代理
+4. 兜底：Codex，项目级（`./.codex/skills`）
+
+装完记得**重启代理**，让它加载新 skill。
+
+## 方式 B — git clone 手动装（不用 CLI）
+
+```bash
+# 挑一个符合你代理的路径
+DEST=~/.claude/skills/nodecoda-workflow
+git clone --depth 1 https://github.com/nodecoda/nodecoda-skill.git /tmp/nodecoda-skill
+cp -R /tmp/nodecoda-skill/skills/nodecoda-workflow "$DEST"
+rm -rf /tmp/nodecoda-skill
+```
+
+验证：
+
+```bash
+ls "$DEST"      # 应该能看到 SKILL.md、manifest.json、references/、examples/
+```
+
+## 接 MCP
+
+### Codex CLI 的接线
+
+本仓库自带 `.codex/config.example.toml` 模板。**首选**是公网 Streamable HTTP 端点（`https://www.nodecoda.com/mcp`），Key 从 `NODECODA_KEY` 环境变量读取——永远不落盘：
 
 ```bash
 cp .codex/config.example.toml .codex/config.toml
-export NODECODA_KEY=sk-...   # add to your shell profile
+export NODECODA_KEY=sk-...   # 加到你的 shell profile
 ```
 
-**Zero-install alternative** (no clone, no local npm install) — let Codex
-fetch the server on demand each session:
+**零安装替代**（不 clone、不本地 npm install）——让 Codex 每次会话按需拉取：
 
 ```toml
 [mcp_servers.nodecoda]
@@ -34,130 +79,61 @@ args = ["-y", "@nodecoda/skill", "mcp"]
 enabled = true
 ```
 
-The npm package serves MCP over stdio via `nodecoda-skill mcp` (`--http
-[--port N]` for the Streamable HTTP transport). Requires the package on the
-npm registry (v0.2.0+); the key is read from `NODECODA_KEY` at request time.
+npm 包通过 `nodecoda-skill mcp` 提供 MCP（`--http [--port N]` 切 Streamable HTTP 传输；需要 npm registry 上的 v0.2.0+；Key 在请求时从 `NODECODA_KEY` 读取）。
 
-The public `/mcp` route is live (verified 2026-08-12) — no SPA catch-all in
-the way. For the routing rules and the self-hosted alternative, see
-`skills/nodecoda-workflow/references/public-service.md` (公网 MCP 直连). Note:
-the OAuth metadata endpoint is not served yet, so use `NODECODA_KEY` rather
-than `codex mcp login`; keys must exist in the backend database.
+公网 `/mcp` 路由已上线（2026-08-12 实测通过）。注意：OAuth metadata 端点还没开，所以用 `NODECODA_KEY` 而不是 `codex mcp login`；Key 必须存在于后端数据库。
 
-For self-hosting or local dev, pick one of the commented-out alternatives in
-the template:
-- **local HTTP server**: `command = "node"`, `args = ["scripts/mcp-http-server.mjs", "--port", "4001"]`
-- **local dev stack**: `url = "http://127.0.0.1:8000/mcp"` + `http_headers`
-- **stdio bridge**: `command = "node"`, `args = ["scripts/mcp-stdio-server.mjs"]`
+自托管 / 本地开发，用模板里注释掉的替代方案之一：
 
-`.codex/config.toml` is gitignored (it may hold a real key in the local-dev
-variants). The skill itself is installed to `.codex/skills/nodecoda-workflow/`
-(also local/gitignored):
+- **本地 HTTP server**：`command = "node"`，`args = ["scripts/mcp-http-server.mjs", "--port", "4001"]`
+- **本地 dev stack**：`url = "http://127.0.0.1:8000/mcp"` + `http_headers`
+- **stdio bridge**：`command = "node"`，`args = ["scripts/mcp-stdio-server.mjs"]`
+
+`.codex/config.toml` 是 gitignored 的（本地 dev 变体可能含真实 Key）。skill 本体装在 `.codex/skills/nodecoda-workflow/`（同样本地、gitignored）：
 
 ```bash
 cp -R skills/nodecoda-workflow .codex/skills/
 ```
 
-## Option A — git clone (works today, no CLI)
+## Cursor 特殊情况
+
+Cursor 读 `.cursor/rules/*.mdc`，不读 `SKILL.md`。`npx ... add ... cursor` 会自动生成 `.mdc`；想手动建也可以：
 
 ```bash
-# Pick a destination matching your agent
-DEST=~/.claude/skills/nodecoda-workflow
-git clone --depth 1 https://github.com/nodecoda/nodecoda-skill.git /tmp/nodecoda-skill
-cp -R /tmp/nodecoda-skill/skills/nodecoda-workflow "$DEST"
-rm -rf /tmp/nodecoda-skill
-```
-
-Verify:
-
-```bash
-ls "$DEST"      # should show SKILL.md, manifest.json, references/, examples/
-```
-
-## Option B — npx (live, v0.2.x)
-
-```bash
-npx -y @nodecoda/skill add nodecoda-workflow
-```
-
-The CLI (`nodecoda-skill`, published as `@nodecoda/skill`) resolves the
-current agent's skill directory and copies `skills/nodecoda-workflow/` there.
-Same package also serves the MCP server (`nodecoda-skill mcp`) — one package
-for both skill install and zero-install MCP wiring. Targets:
-
-```bash
-npx -y @nodecoda/skill add nodecoda-workflow              # auto: detects the agent (see below)
-npx -y @nodecoda/skill add nodecoda-workflow codex        # ./.codex/skills
-npx -y @nodecoda/skill add nodecoda-workflow claude-code  # ./.claude/skills
-npx -y @nodecoda/skill add nodecoda-workflow cursor       # generates .cursor/rules/*.mdc
-npx -y @nodecoda/skill add nodecoda-workflow ~/.claude/skills   # explicit dir
-npx -y @nodecoda/skill list / info / validate             # inspect & self-check
-```
-
-`install` is an alias for `add`. Platform differences handled: Codex /
-Claude Code / Gemini CLI get the skill copied into their `SKILL.md`-based
-search dirs; **Cursor is the exception** — it cannot load `SKILL.md`, so
-`add ... cursor` (or an auto-detected Cursor project) generates a
-`.cursor/rules/nodecoda-workflow.mdc` rule with YAML frontmatter and the
-skill content inlined.
-
-**No-target `add` auto-detects the platform** in this order:
-1. the agent session that invoked the CLI (`CODEX_HOME` /
-   `CLAUDE_CODE_ENTRYPOINT` / `CLAUDE_CODE_HOME` / `GEMINI_CACHE_DIR`)
-2. an agent already set up in the current project (`.codex/`, `.claude/`,
-   `.gemini/`, `.cursor/` dir present)
-3. an agent configured in your home directory
-4. fallback: Codex, project-local (`./.codex/skills`)
-
-Restart your agent after installing so it picks up the new skill.
-
-## Option C — Python (pip / uv) — deferred
-
-The Python distribution channel is intentionally **not shipped yet**: the npm
-package covers every mainstream agent (they all launch the MCP server or the
-skill installer via `npx`, no Python runtime required). Reintroduce
-`pyproject.toml` + a PyPI release only when a concrete Python-only consumer
-shows up.
-
-## Cursor (special case)
-
-Cursor reads `.cursor/rules/*.mdc` instead of `SKILL.md`. Until we ship a generated `.mdc` (planned v0.2.0), create it manually:
-
-```bash
-# One-time setup
+# 一次性设置
 mkdir -p .cursor/rules
 curl -L https://raw.githubusercontent.com/nodecoda/nodecoda-skill/main/skills/nodecoda-workflow/SKILL.md \
   -o .cursor/rules/nodecoda-workflow.mdc
 ```
 
-The `.mdc` is just a markdown wrapper; Cursor will treat it as rules.
+`.mdc` 只是带 frontmatter 的 markdown 包装，Cursor 会把它当规则对待。
 
-## Verifying the install
+## 装完怎么验证
 
-After install, ask the agent:
+装好之后，直接问代理：
 
-> "用 NodeCoda 写一个最小工作流,接受字符串输入并原样返回。"
+> "用 NodeCoda 写一个最小工作流，接受字符串输入并原样返回。"
 
-A correctly installed skill should produce a `.ncoda` file that starts with `@language nodecoda/1` and uses `function main(...) -> string { return ... }` — without any additional explanation.
+装对了，它应该产出一个以 `@language nodecoda/1` 开头、用 `function main(...) -> string { return ... }` 的 `.ncoda` 文件——不用你多解释一句。
 
-If the agent does not know about `build_dify_workflow`, the install failed; check that `SKILL.md` is at the top level of the installed path (not nested).
+如果代理不知道 `build_dify_workflow`，说明没装好：检查 `SKILL.md` 是否在安装路径的**顶层**（别嵌套）。
 
-## Versioning & upgrades
+## 版本与升级
 
-The skill and NodeCoda core are versioned independently. To check compatibility:
+skill 和 NodeCoda core **独立版本化**。查兼容性：
 
 ```bash
 cat ~/.claude/skills/nodecoda-workflow/manifest.json | grep -E 'min_nodecoda|target_profile'
 ```
 
-If your NodeCoda version is below `min_nodecoda`, the skill's MCP contract may differ from what your MCP server speaks. Upgrade NodeCoda, or pin the skill to an older release:
+如果 NodeCoda 版本低于 `min_nodecoda`，skill 的 MCP 契约可能和你 MCP server 说的对不上。升级 NodeCoda，或把 skill 钉到旧版本：
 
 ```bash
 git clone --depth 1 --branch v0.1.0 https://github.com/nodecoda/nodecoda-skill.git
 cp -R nodecoda-skill/skills/nodecoda-workflow ~/.claude/skills/
 ```
 
-## Uninstalling
+## 卸载
 
 ```bash
 rm -rf ~/.claude/skills/nodecoda-workflow    # Claude Code
@@ -165,4 +141,8 @@ rm -rf .codex/skills/nodecoda-workflow        # Codex
 rm -f  .cursor/rules/nodecoda-workflow.mdc    # Cursor
 ```
 
-Restart your agent to clear any cached context.
+重启代理，清掉缓存的上下文。
+
+## Python（pip / uv）通道——暂缓
+
+Python 分发通道**故意不发布**：npm 包已经覆盖所有主流代理（它们都通过 `npx` 拉起 MCP server 或 skill 安装器，不需要 Python 运行时）。等出现真正的纯 Python 消费方，再补 `pyproject.toml` + PyPI 发布。
