@@ -56,7 +56,13 @@ jobs:
       - name: Validate package.json
         run: node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))"
       - name: Publish
-        run: npm publish --access public
+        run: |
+          VER="${{ needs.verify.outputs.skill-version }}"
+          if npm view "@nodecoda/skill@$VER" version >/dev/null 2>&1; then
+            echo "version $VER already published — skipping publish (idempotent release)"
+          else
+            npm publish --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
