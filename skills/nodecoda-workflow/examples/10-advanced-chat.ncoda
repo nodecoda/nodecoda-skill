@@ -3,7 +3,7 @@
 
 // 多轮对话 + 会话变量
 // 展示 @mode advanced-chat、@conversation、answer()、会话变量赋值/复合赋值/追加
-// 注意:会话变量赋值只支持标量字面量(实证 G4/G5),动态数据靠 LLM 对话记忆
+// (会话变量不能放进模板串插值,直接作 answer 参数或条件判断;见 gotchas G11)
 
 @conversation string greeting = "你好";
 @conversation int visit_count = 0;
@@ -14,7 +14,8 @@ function main(string user_input) {
     visit_count += 1;
     history << user_input;
 
-    answer(`第 ${visit_count} 轮:${greeting},你说「${user_input}」`);
+    answer(`你说:${user_input}`);
+    answer(greeting);
     if (visit_count > 3) {
         answer("聊得够多了,今天先到这里。");
     }

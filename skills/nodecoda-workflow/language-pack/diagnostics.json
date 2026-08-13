@@ -106,7 +106,8 @@
       "stage": "L4",
       "codes": [
         "CODEGEN_ERROR",
-        "ARTIFACT_INVALID"
+        "ARTIFACT_INVALID",
+        "LOWERING_INVARIANT"
       ],
       "repair_direction": "视为服务 bug，留 Build ID 报告",
       "doc": "references/diagnostics.md"
@@ -154,6 +155,34 @@
       "cause": "策略白名单:llm 无 timeout(http 有)",
       "fix": "llm 用 with default(...) 或 attempt;http 可 with timeout(30s)",
       "ref": "G9"
+    },
+    {
+      "code": "LOWERING_INVARIANT",
+      "excerpt": "Condition expression BinaryExpr is not directly lowerable",
+      "cause": "if 比较左侧为 2 级字段",
+      "fix": "左侧绑 1 级局部变量再比较",
+      "ref": "G10"
+    },
+    {
+      "code": "LOWERING_INVARIANT",
+      "excerpt": "Validated expression has no physical producer selector",
+      "cause": "三元结果变量在 if 分支模板串插值",
+      "fix": "三元只在非分支上下文",
+      "ref": "G10"
+    },
+    {
+      "code": "LOWERING_INVARIANT",
+      "excerpt": "Validated calculation identifier 'greeting' has no value",
+      "cause": "会话变量模板串插值",
+      "fix": "直接作 answer 参数/条件判断",
+      "ref": "G11"
+    },
+    {
+      "code": "SYNTAX_ERROR",
+      "excerpt": "Expected parallel-for error mode, got KW_CONTINUE",
+      "cause": "on_error 用了非白名单词",
+      "fix": "用 terminate/keep_null/remove_failed",
+      "ref": "G12"
     }
   ]
 }

@@ -169,6 +169,10 @@ if (condition) {
 
 每个分支必须返回值（如果后续代码需要统一结果）。
 
+**可降级条件形态（实证）**：裸 bool 字段（任意深度）、`!expr`、`x.contains("字面量")`、
+左侧为 1 级字段/标识符的比较（右侧为字面量），`&&` 可组合；2 级字段（如
+`extracted.value.days > 5`）先绑定为局部变量再比较。详见 `gotchas.md` G10。
+
 ### 5.2 循环
 
 ```nodecoda
@@ -215,6 +219,13 @@ let results = parallel {
     }
 };
 // results.left, results.right 访问
+```
+
+// 并行 for：并发遍历 + yield 收集（on_error ∈ terminate | keep_null | remove_failed）
+let results = parallel for (item in items, concurrency: 3, on_error: remove_failed) {
+    let r = llm(MODEL, { "messages": [...] });
+    yield r.text;
+};
 ```
 
 ---
@@ -319,6 +330,10 @@ function main(string user_input) {
 
 **类型说明**：`array<string>` 和 `string[]` 是同义词，都表示字符串数组。
 默认值只能是字面量。
+
+**注意（实证）**：会话变量**不能放进模板串插值**（`answer(\`欢迎,${greeting}\`)` 会报
+`LOWERING_INVARIANT`）——直接作 `answer` 参数或条件判断；非会话变量（main 参数、
+局部变量）可以插值。详见 `gotchas.md` G11。
 
 ---
 

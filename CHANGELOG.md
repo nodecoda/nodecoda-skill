@@ -89,6 +89,29 @@ e2e 全量冒烟首个失败点：`06-error-handling.ncoda` 中
 - `references/language-reference.md` §11 — 补策略白名单注记。
 - `language-pack/version.json` — hash 重算。
 
+### Fixed - 示例 07/10/12 降级限制实证回写（v0.2.19，主仓编译器本地预编译验证）
+
+e2e 第二轮在 `07-structured-extract.ncoda` 报 `LOWERING_INVARIANT`。用主仓
+编译器（`/home/dev/dcc/lang`，`compile_nodecoda_result`）本地复现并二分定位，
+顺带预编译全部 14 个示例，发现并修复 3 个示例共 5 处降级限制：
+
+- `07` — 三元结果变量在 if 分支模板串插值 → `Validated expression has no physical
+  producer selector`；`extracted.value.days > 5`（2 级字段比较）→ `Condition expression
+  BinaryExpr is not directly lowerable`。改为：字段先绑定局部变量再比较、裸 bool
+  字段作条件、不插值三元结果变量。
+- `10` — 会话变量模板串插值（`answer` 的模板串里引用 `${greeting}`）→ `Validated
+  calculation identifier 'greeting' has no value`。改为直接作 `answer` 参数 + 条件判断
+  （`visit_count += 1`、`history << user_input` 本身可用）。
+- `12` — `on_error: continue` → `SYNTAX_ERROR: Expected parallel-for error mode,
+  got KW_CONTINUE`；parser 白名单 `{terminate, keep_null, remove_failed}`，改用
+  `remove_failed`。
+- **治理增强**：新流程「e2e 失败 → 主仓编译器本地复现二分 → 修示例 → 本地预编译
+  全部示例通过后再发下一轮 e2e」，减少往返。
+- 回写：`gotchas.md` G10/G11/G12、`diagnostics-map.md` 4 行、`diagnostics.json`
+  empirical 4 条 + codegen 分类补 `LOWERING_INVARIANT`、`language-reference.md`
+  §5.1/§5.3/§10 注记、`grammar-reference.md` on_error 枚举注记。
+- **当前状态**：14/14 示例经主仓编译器预编译通过（`compile_all` 全 OK）。
+
 ## [0.2.14] — 2026-08-13
 
 ### Added - References 目录规范与实证文档

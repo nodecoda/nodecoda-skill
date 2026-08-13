@@ -79,6 +79,45 @@
     （`default policy cannot be combined with an explicit failure branch`）。
   - `retry(max: N)` 必须 N ≥ 1,且同调用不能重复 `retry`。
 
+## G10. `if` 条件可降级形态受限 — LOWERING_INVARIANT
+- **现象**:
+  - `Condition expression BinaryExpr is not directly lowerable` — 比较左侧是 2 级字段
+    （如 `extracted.value.days > 5`）；
+  - `Validated expression has no physical producer selector` — 三元结果变量在 if
+    分支的模板串里插值。
+- **原因**:IF/ELSE 降级只接受:裸 bool 字段（任意深度）、`!expr`、`x.contains("字面量")`、
+  以及**左侧为 1 级字段/标识符**的比较（`==`/`!=`/`<`/`>`/`<=`/`>=`，右侧为字面量）；
+  `&&` 可拆分组合（每侧须各自可降级）。2 级字段比较、推迟三元（`let x = a ? b : c`）
+  在分支模板插值走不通。
+- **正确写法**:
+  ```nodecoda
+  let trip_days = extracted.value.days;   // 2 级字段先绑定为 1 级局部变量
+  if (trip_days > 5) { ... }
+  if (extracted.value.flexible) { ... }   // 裸 bool 字段任意深度可用
+  ```
+  三元结果变量只在非分支上下文使用（直接 `return` 或非分支模板串可以；放进 if
+  分支体内的模板串不行）。
+
+## G11. 会话变量不能放进模板串插值 — LOWERING_INVARIANT
+- **现象**:`Validated calculation identifier 'greeting' has no value`（模板串 `${greeting}` 处）
+- **原因**:`@conversation` 变量没有物理 producer 可供模板引用解析。
+- **正确写法**:
+  ```nodecoda
+  answer(greeting);                    // 直接作参数 ✓
+  if (visit_count > 3) { ... }         // 条件判断 ✓
+  // answer(`欢迎,${greeting}`);       // ✗ LOWERING_INVARIANT
+  ```
+  非会话变量（main 参数、局部变量）可插值：`answer(\`你说:${user_input}\`)` ✓。
+
+## G12. `parallel for` 的 `on_error` 只接受三种模式 — SYNTAX_ERROR
+- **现象**:`Expected parallel-for error mode, got KW_CONTINUE ('continue')`
+- **原因**:parser 对 on_error 白名单 `{terminate, keep_null, remove_failed}`。
+- **正确写法**:
+  ```nodecoda
+  let r = parallel for (x in xs, concurrency: 3, on_error: remove_failed) { ... };
+  ```
+  - `terminate` — 遇错终止；`keep_null` — 失败项保留为 null；`remove_failed` — 失败项剔除。
+
 ## 排查顺序
 1. 按 error code 定位到上面某条(不全时配 `diagnostics-map.md`)。
 2. 若文档与现象不符 → **先跑最小复现探针**(一个最小文件单向验证),隔离【声明顺序】vs【构造不支持】,别猜。

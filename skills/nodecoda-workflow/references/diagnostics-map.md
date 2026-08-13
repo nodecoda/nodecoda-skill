@@ -12,6 +12,10 @@
 | `TARGET_NOT_LOWERABLE` | `extract_text requires a selector-backed scalar file with a declared extractable extension` | `file<>` 没声明可提取扩展名 | 类型写 `file<document; .pdf>`(见 G3) |
 | `TARGET_NOT_LOWERABLE` | `conversation variable set operation only supports scalar literal values` | 给会话变量赋了动态值 | 只赋标量字面量,动态数据靠 LLM 记忆(见 G4) |
 | `OPERATION_POLICY` | `Operation 'llm' does not support timeout` | 策略白名单:llm 无 timeout(http 有) | llm 用 `with default(...)` 或 `attempt`;http 可 `with timeout(30s)`(见 G9) |
+| `LOWERING_INVARIANT` | `Condition expression BinaryExpr is not directly lowerable` | 比较左侧为 2 级字段(如 a.b.c) | 左侧绑 1 级局部变量再比较(见 G10) |
+| `LOWERING_INVARIANT` | `Validated expression has no physical producer selector` | 三元结果变量在 if 分支模板串插值 | 三元只在非分支上下文,分支内不插值(见 G10) |
+| `LOWERING_INVARIANT` | `Validated calculation identifier 'greeting' has no value` | 会话变量模板串插值 | 直接作 answer 参数/条件判断(见 G11) |
+| `SYNTAX_ERROR` | `Expected parallel-for error mode, got KW_CONTINUE ('continue')` | on_error 用了非白名单词 | 用 terminate/keep_null/remove_failed(见 G12) |
 
 ## 尚未在本 repo 实证、但理论存在的 code
 

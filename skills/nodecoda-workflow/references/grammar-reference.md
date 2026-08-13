@@ -107,7 +107,7 @@ map_entry   = map_key ":" expression ;
 map_key     = expression | "timeout" ;
 for_expr    = "for" "(" for_var "in" expression ")" yield_block ;        // 至少一个 yield
 parallel_for_expr = "parallel" "for" "(" for_var "in" expression ","
-                    concurrency ":" INT "," on_error ":" IDENTIFIER ")" yield_block ;
+                    concurrency ":" INT "," on_error ":" IDENTIFIER ")" yield_block ;  // on_error ∈ {terminate, keep_null, remove_failed}
 parallel_expr = "parallel" "{" IDENTIFIER ":" block { IDENTIFIER ":" block } "}" ;  // 命名并行（表达式）
 yield_block = "{" stmt_list yield_stmt stmt_list "}" ;
 lambda_expr = "(" lambda_params_opt ")" "->" expression ;

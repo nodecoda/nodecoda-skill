@@ -10,7 +10,7 @@
 | `04-code-node.ncoda` | Python FFI | `foreign code python3(...)` + 多输出结构体 |
 | `05-conditional-output.ncoda` | 条件分支 + 多输出 | `if / else if / else` + `output("key", value)` |
 | `06-error-handling.ncoda` | 错误处理 | `attempt/success/failure` + `with retry/timeout` |
-| `07-structured-extract.ncoda` | 结构化抽取 | `extract<T>` + 具名 record + 三元表达式 |
+| `07-structured-extract.ncoda` | 结构化抽取 | `extract<T>` + 具名 record + 数组字段 + 条件分支 |
 | `08-tool-and-http.ncoda` | 工具 + HTTP + LLM 链 | `tool()` + `http()` + 模板字符串 |
 | `09-knowledge-rag.ncoda` | 知识库 RAG | `knowledge()` + `extract_text()` + `file<>` + `std.v1.rag_answer()` |
 | `10-advanced-chat.ncoda` | 多轮对话 + 会话变量 | `@mode advanced-chat` + `@conversation` + `answer()` |
