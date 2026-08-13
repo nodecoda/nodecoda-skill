@@ -59,6 +59,26 @@
 - **原因**:§7 保留字表(见 `grammar-reference.md`)。
 - **正确写法**:换名,如 `result`/`content`。(保留字全表见 grammar-reference §7)
 
+## G9. 操作策略支持矩阵（白名单实证）
+- **白名单来源**:主仓 `lang/src/nclang/lang/operation_registry.py`（`OperationPolicySupport`）+
+  真实 Build 实证。违反白名单报 `OPERATION_POLICY`。
+
+| 操作 | retry | timeout | default | failure_branch(attempt) |
+|------|:---:|:---:|:---:|:---:|
+| `llm` | ✓ | ✗ | ✓ | ✓ |
+| `http` | ✓ | ✓ | ✓ | ✓ |
+| `tool` | ✓ | ✗ | ✗ | ✓ |
+| `knowledge` / `extract_text` / `classify` | ✗ | ✗ | ✗ | ✗ |
+| `extract<T>` | ✗（E1045） | ✗ | ✗ | ✓ |
+
+- **实证现象**:`Operation 'llm' does not support timeout`（OPERATION_POLICY，2026-08-13 e2e）。
+- **正确写法**:
+  - llm 要兜底:`with default(...)` 合法;要超时:别写 `timeout`,用 `attempt` 包装或 Dify 端配置。
+  - http 超时:`with timeout(30s)` 合法(主仓单测 `test_http_timeout_and_default_policies_serialize`)。
+  - `attempt` + `default` 冲突:`attempt ... with default(...) as x` 会被拒
+    （`default policy cannot be combined with an explicit failure branch`）。
+  - `retry(max: N)` 必须 N ≥ 1,且同调用不能重复 `retry`。
+
 ## 排查顺序
 1. 按 error code 定位到上面某条(不全时配 `diagnostics-map.md`)。
 2. 若文档与现象不符 → **先跑最小复现探针**(一个最小文件单向验证),隔离【声明顺序】vs【构造不支持】,别猜。

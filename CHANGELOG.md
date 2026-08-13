@@ -70,6 +70,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `parallel for` 等语法合法但 target 敏感的构造由此获得真实 Build 验证
   （需 `E2E_NODECODA_KEY`，仍为 workflow_dispatch 手动触发，不进 push 门禁）。
 
+### Fixed - 实证回写：`llm` 不支持 `timeout` 操作策略（v0.2.19）
+
+e2e 全量冒烟首个失败点：`06-error-handling.ncoda` 中
+`llm(...) with retry(...), timeout(30s)` 被真实 Build 拒绝——
+`OPERATION_POLICY: Operation 'llm' does not support timeout`。
+
+- `examples/06-error-handling.ncoda` — 去掉 llm 上的 `timeout(30s)`，只保留
+  实证支持的 `with retry(max: 3, interval: 1s)`；注释同步。
+- `language-pack/builtins.json` — `operation_policies` 按主仓白名单修正：
+  `retry` → llm/http/tool；`timeout` → 仅 http（llm 实证拒绝）；`default` → llm/http
+  （attempt 组合冲突、值须匹配契约 E1045）。
+- `references/gotchas.md` — 新增 **G9**：完整策略支持矩阵（白名单来源
+  `lang/src/nclang/lang/operation_registry.py` + e2e 实证，主仓单测 9/9 佐证）。
+- `references/diagnostics-map.md` — 实证表新增 `OPERATION_POLICY` 行。
+- `language-pack/diagnostics.json` — capability 分类补 `OPERATION_POLICY` 码 +
+  empirical 条目。
+- `references/language-reference.md` §11 — 补策略白名单注记。
+- `language-pack/version.json` — hash 重算。
+
 ## [0.2.14] — 2026-08-13
 
 ### Added - References 目录规范与实证文档

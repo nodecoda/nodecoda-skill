@@ -12,18 +12,18 @@
   ],
   "hashes": {
     "grammar.ebnf": "61d6b235b97acda9282b861791a1fd9466497d944c4b64416ef33ce2a92c5ccb",
-    "builtins.json": "5a567e8065b042ab0947227f455b299bd5b3d701b2fda48882cfd3f28c11e2fd",
-    "diagnostics.json": "a50f6babbc0638ebf0bd6f569d46e362fe5fcbe0d263593069d215430b6f8d8b",
+    "builtins.json": "4a9f8ce2f130bbec4f3e8a3d709eca38bd0fb9a27abea8ab3a49070c8671338a",
+    "diagnostics.json": "881f8422ae1243b7197fe27776b36909ed916b6a0e6e02e428567b887f146f14",
     "targets/dify-1.16-graphon-0.6.json": "5cc722dc34a52cfd5abc165f0a669baffa56ba56d9bc6a9d356dc209a279c777",
     "antipatterns.json": "b546732140d078f1df91f6000cf6be4ffb7e2fababca59a3d16f69c2738e840d"
   },
   "note": "hashes = sha256 of sorted-key JSON (grammar.ebnf hashed as text); source_hashes = raw-text sha256 of each references/*.md source",
   "source_hashes": {
     "references/grammar-reference.md": "cb8434320461f8f0ad17d2d5c9cc135fea7a37a10a1d79b917427f61edd987c8",
-    "references/language-reference.md": "0abd08a4f87c68bbace1a89b139c0e38f77b3e3674a710d9d39de8c46d05f2ff",
+    "references/language-reference.md": "e857d326622288718a7c3d7ff7fa16bd10d96bf7728ab997ba937735e3082fb0",
     "references/target-capabilities.md": "a4f39442aac99b6e44e5c882c23957354cef410203351e0fc81f34044f6c6315",
     "references/diagnostics.md": "dc5aaacbfb14ce3dba0c6a105d7ed4c157ae569b52e84ebfaa330aa6dc41a135",
-    "references/diagnostics-map.md": "fb05d8bcda431f623f170208b1ef0b53acd25b6342d6c72c20d7a6343c610b48",
-    "references/gotchas.md": "d6f2e6de2653078c09e7fc52771c78eab03e05bd386c98a5e51f09ffefa71369"
+    "references/diagnostics-map.md": "eee6d6d655f4bcec84fbd6adf1b804d118c704226f33e09438367ec350630fef",
+    "references/gotchas.md": "6d67fcd5cf78177ffe583f3b4531918698910a4e50a9bb17f4fac0be3648bc99"
   }
 }

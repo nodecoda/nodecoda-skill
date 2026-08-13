@@ -350,6 +350,11 @@ let page = http("GET", url, {}) with retry(max: 2, interval: 500ms);
 // let x = extract<T>(...) with retry(...)  ← 错误！
 ```
 
+> **策略白名单（实证 + 主仓 registry）**：`retry` 支持 `llm`/`http`/`tool`；
+> `timeout` 仅 `http`（`llm` 拒绝，报 `OPERATION_POLICY`）；`default` 支持 `llm`/`http`
+> （但与 `attempt` 组合会冲突）。完整矩阵见 `gotchas.md` G9。
+```
+
 ---
 
 ## 12. 保留关键字（禁止用作变量名）

@@ -75,7 +75,8 @@
       "stage": "L2",
       "codes": [
         "CAPABILITY_BLOCKED",
-        "TARGET_FEATURE_UNSUPPORTED"
+        "TARGET_FEATURE_UNSUPPORTED",
+        "OPERATION_POLICY"
       ],
       "repair_direction": "不改 Source，改设计或换目标",
       "doc": "references/target-capabilities.md"
@@ -146,6 +147,13 @@
       "cause": "把整个 file 变量当 LLM content",
       "fix": "先 extract_text 再喂 LLM",
       "ref": "G6"
+    },
+    {
+      "code": "OPERATION_POLICY",
+      "excerpt": "Operation 'llm' does not support timeout",
+      "cause": "策略白名单:llm 无 timeout(http 有)",
+      "fix": "llm 用 with default(...) 或 attempt;http 可 with timeout(30s)",
+      "ref": "G9"
     }
   ]
 }

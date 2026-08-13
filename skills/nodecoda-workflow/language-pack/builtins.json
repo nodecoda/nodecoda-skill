@@ -123,17 +123,18 @@
       "signature": "retry(max: int[, interval: duration])",
       "applies_to": [
         "llm",
-        "http"
+        "http",
+        "tool"
       ],
-      "notes": "extract<T> 不支持（用则报 E1045）"
+      "notes": "extract<T> 不支持(用则报 E1045);白名单见主仓 operation_registry.py"
     },
     {
       "name": "timeout",
       "signature": "timeout(duration)",
       "applies_to": [
-        "llm",
         "http"
-      ]
+      ],
+      "notes": "仅 http 支持;llm 拒绝(timeout 实证 2026-08-13 e2e: OPERATION_POLICY)"
     },
     {
       "name": "default",
@@ -141,7 +142,8 @@
       "applies_to": [
         "llm",
         "http"
-      ]
+      ],
+      "notes": "attempt 组合冲突(default policy cannot be combined with an explicit failure branch);default 值须匹配响应契约(E1045)"
     }
   ]
 }

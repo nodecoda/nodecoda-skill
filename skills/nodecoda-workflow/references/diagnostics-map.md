@@ -11,6 +11,7 @@
 | `FIELD_NOT_FOUND` | `Field 'text' not found on file type. Available fields: name, filename, ...` | 访问了文件不存在的字段 | 用 `extract_text(doc).text`,别用 `doc.text`(见 G2) |
 | `TARGET_NOT_LOWERABLE` | `extract_text requires a selector-backed scalar file with a declared extractable extension` | `file<>` 没声明可提取扩展名 | 类型写 `file<document; .pdf>`(见 G3) |
 | `TARGET_NOT_LOWERABLE` | `conversation variable set operation only supports scalar literal values` | 给会话变量赋了动态值 | 只赋标量字面量,动态数据靠 LLM 记忆(见 G4) |
+| `OPERATION_POLICY` | `Operation 'llm' does not support timeout` | 策略白名单:llm 无 timeout(http 有) | llm 用 `with default(...)` 或 `attempt`;http 可 `with timeout(30s)`(见 G9) |
 
 ## 尚未在本 repo 实证、但理论存在的 code
 
