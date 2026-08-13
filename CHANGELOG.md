@@ -40,6 +40,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   language-pack `version.json` source_hash）。
 
 
+### Added - 第二批示例 09–12（v0.2.17）
+
+- `09-knowledge-rag.ncoda` — 知识库 RAG：`knowledge()` 多数据集检索、
+  `extract_text()` + `file<>` 类型（实证 G2/G3）、`std.v1.rag_answer()` 标准库问答。
+- `10-advanced-chat.ncoda` — 多轮对话 + 会话变量：`@mode advanced-chat`、
+  `@conversation`（G1 顺序）、`answer()`、会话变量赋值/复合赋值/追加（G4/G5 边界）。
+- `11-loop-transform.ncoda` — 循环 + 集合操作：`for` 表达式（yield 收集）、
+  `split`/`filter`/`take`、lambda、字符串方法。
+- `12-parallel-for.ncoda` — 并发处理：`parallel for` + `concurrency`/`on_error`。
+- `manifest.examples` 扩到 12 项；`examples/README.md` 表格与 backlog 同步；
+  `language-reference.md` §13 再补 5 行示例文件列（同步重算 source_hash）。
+- ⚠️ 待真实 Build 冒烟：09/11/12 涉及 `file<>` 入参、`-> string[]` 数组返回、
+  `parallel for` 语义（语法门已通过，完整合法性以 Build pipeline 为准，见
+  `.github/workflows/e2e.yml`）。
+
 ## [0.2.14] — 2026-08-13
 
 ### Added - References 目录规范与实证文档

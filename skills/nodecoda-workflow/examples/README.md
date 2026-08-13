@@ -12,6 +12,10 @@
 | `06-error-handling.ncoda` | 错误处理 | `attempt/success/failure` + `with retry/timeout` |
 | `07-structured-extract.ncoda` | 结构化抽取 | `extract<T>` + 具名 record + 三元表达式 |
 | `08-tool-and-http.ncoda` | 工具 + HTTP + LLM 链 | `tool()` + `http()` + 模板字符串 |
+| `09-knowledge-rag.ncoda` | 知识库 RAG | `knowledge()` + `extract_text()` + `file<>` + `std.v1.rag_answer()` |
+| `10-advanced-chat.ncoda` | 多轮对话 + 会话变量 | `@mode advanced-chat` + `@conversation` + `answer()` |
+| `11-loop-transform.ncoda` | 循环 + 集合操作 | `for` 表达式(yield) + `split`/`filter`/`take` + lambda |
+| `12-parallel-for.ncoda` | 并发处理 | `parallel for` + `concurrency`/`on_error` |
 
 ## 用法
 
@@ -45,9 +49,7 @@ agent 应当:
 ## 后续添加
 
 按需补充更多模式:
-- 多轮对话 (`@mode advanced-chat` + `answer()`)
-- 知识库检索 (`knowledge()` + `extract_text()` + `file<>` 类型)
-- 会话变量 (`@conversation`)
-- 循环与集合操作 (`for` + `split`/`filter`/`take`)
-- `parallel for` 并发控制
-- `enum` 声明与 `file<>` 文件类型
+- `enum` 声明与枚举用法
+- `request_input` 交互式分支
+- `std.v1.fetch_and_summarize` 摘要复合节点
+- `foreign code` 单输出变体(当前示例 04 为多输出结构体)

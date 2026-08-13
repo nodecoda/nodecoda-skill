@@ -1,6 +1,6 @@
 {
   "name": "nodecoda-workflow",
-  "version": "0.2.16",
+  "version": "0.2.17",
   "description": "Author, validate, and build Dify workflows via NodeCoda MCP. Use when the user wants to author .ncoda source, call build_dify_workflow, interpret diagnostics, or iterate on Dify workflow generation. Live: codex + public deployment wired.",
   "platforms": [
     "claude-code",
@@ -41,7 +41,11 @@
     "examples/05-conditional-output.ncoda",
     "examples/06-error-handling.ncoda",
     "examples/07-structured-extract.ncoda",
-    "examples/08-tool-and-http.ncoda"
+    "examples/08-tool-and-http.ncoda",
+    "examples/09-knowledge-rag.ncoda",
+    "examples/10-advanced-chat.ncoda",
+    "examples/11-loop-transform.ncoda",
+    "examples/12-parallel-for.ncoda"
   ],
   "license": "Apache-2.0",
   "homepage": "https://github.com/nodecoda/nodecoda-skill",
