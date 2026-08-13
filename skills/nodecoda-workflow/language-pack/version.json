@@ -20,7 +20,7 @@
   "note": "hashes = sha256 of sorted-key JSON (grammar.ebnf hashed as text); source_hashes = raw-text sha256 of each references/*.md source",
   "source_hashes": {
     "references/grammar-reference.md": "cb8434320461f8f0ad17d2d5c9cc135fea7a37a10a1d79b917427f61edd987c8",
-    "references/language-reference.md": "f3d0d049a98877ac35dedd3a8816a7e5963d59e08a2c03851c06b104d3eec768",
+    "references/language-reference.md": "0abd08a4f87c68bbace1a89b139c0e38f77b3e3674a710d9d39de8c46d05f2ff",
     "references/target-capabilities.md": "a4f39442aac99b6e44e5c882c23957354cef410203351e0fc81f34044f6c6315",
     "references/diagnostics.md": "dc5aaacbfb14ce3dba0c6a105d7ed4c157ae569b52e84ebfaa330aa6dc41a135",
     "references/diagnostics-map.md": "fb05d8bcda431f623f170208b1ef0b53acd25b6342d6c72c20d7a6343c610b48",

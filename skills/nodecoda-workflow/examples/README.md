@@ -16,6 +16,8 @@
 | `10-advanced-chat.ncoda` | 多轮对话 + 会话变量 | `@mode advanced-chat` + `@conversation` + `answer()` |
 | `11-loop-transform.ncoda` | 循环 + 集合操作 | `for` 表达式(yield) + `split`/`filter`/`take` + lambda |
 | `12-parallel-for.ncoda` | 并发处理 | `parallel for` + `concurrency`/`on_error` |
+| `13-fetch-summarize.ncoda` | 标准库复合节点 | `std.v1.fetch_and_summarize()` (HTTP+LLM 摘要) |
+| `14-ffi-single-output.ncoda` | Python FFI 单输出 | `foreign code python3` 单输出契约 |
 
 ## 用法
 
@@ -48,8 +50,12 @@ agent 应当:
 
 ## 后续添加
 
-按需补充更多模式:
+示例集已覆盖当前 target 全部"完全支持"构造（见 `references/target-capabilities.md`）。
+
+以下构造**文法合法但当前 target（`dify-1.16-graphon-0.6`）不支持**——按能力门
+治理规则，写示例会在真实 Build 报 `CAPABILITY_BLOCKED` / `TARGET_FEATURE_UNSUPPORTED`，
+因此**不写示例、改设计**，等 target 扩展支持后再补：
+
 - `enum` 声明与枚举用法
 - `request_input` 交互式分支
-- `std.v1.fetch_and_summarize` 摘要复合节点
-- `foreign code` 单输出变体(当前示例 04 为多输出结构体)
+- 其余未列入"完全支持"表的构造同理

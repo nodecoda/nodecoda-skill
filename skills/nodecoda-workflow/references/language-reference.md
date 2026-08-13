@@ -379,7 +379,7 @@ let page = http("GET", url, {}) with retry(max: 2, interval: 500ms);
 | 会话状态 | `@conversation` 变量 | `examples/10-advanced-chat.ncoda` |
 | 结构化抽取 | `extract<T>(...)` | `examples/07-structured-extract.ncoda` |
 | RAG 问答 | `std.v1.rag_answer(...)` | `examples/09-knowledge-rag.ncoda` |
-| HTTP 摘要 | `std.v1.fetch_and_summarize(...)` | — |
+| HTTP 摘要 | `std.v1.fetch_and_summarize(...)` | `examples/13-fetch-summarize.ncoda` |
 | 错误处理 | `attempt { success/failure }` | `examples/06-error-handling.ncoda` |
 | 多输出 | `output("key", value)` | `examples/05-conditional-output.ncoda` |
 | 列表操作 | `split/filter/take` | `examples/11-loop-transform.ncoda` |

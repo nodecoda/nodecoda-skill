@@ -55,6 +55,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `parallel for` 语义（语法门已通过，完整合法性以 Build pipeline 为准，见
   `.github/workflows/e2e.yml`）。
 
+### Added - 第三批示例 13–14 + e2e 全量冒烟（v0.2.18）
+
+- `13-fetch-summarize.ncoda` — 标准库复合节点：`std.v1.fetch_and_summarize()`
+  （HTTP 获取 + LLM 摘要；url/model 必须为字面量，§7）。
+- `14-ffi-single-output.ncoda` — Python FFI 单输出契约（直接使用返回值，区别于
+  04 的多输出结构体，§6）。
+- `manifest.examples` 扩到 14 项；`examples/README.md` 表格与 backlog 同步；
+  `language-reference.md` §13 补"HTTP 摘要"示例列（重算 source_hash）。
+- **能力门决策**：`enum` / `request_input` 文法合法但当前 target 能力矩阵无条目，
+  按能力门治理"改设计不改 Source"，**不写示例**，README backlog 已改为阻断说明。
+- `.github/workflows/e2e.yml`：手动冒烟从仅构建 `01-hello-workflow` 扩展为
+  **构建全部 14 个示例**——09/11/12 的 `file<>` 入参、`-> string[]` 返回、
+  `parallel for` 等语法合法但 target 敏感的构造由此获得真实 Build 验证
+  （需 `E2E_NODECODA_KEY`，仍为 workflow_dispatch 手动触发，不进 push 门禁）。
+
 ## [0.2.14] — 2026-08-13
 
 ### Added - References 目录规范与实证文档

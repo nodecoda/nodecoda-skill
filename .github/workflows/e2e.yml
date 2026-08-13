@@ -25,6 +25,12 @@ jobs:
             echo "::error::E2E_NODECODA_KEY secret is not set — add a real sk-... key to repo secrets."
             exit 1
           fi
-          node scripts/live-mcp.mjs --source skills/nodecoda-workflow/examples/01-hello-workflow.ncoda
+          # Build every shipped example against the real pipeline so grammar-legal
+          # but target-sensitive constructs (file<> params, -> string[] returns,
+          # parallel for, stdlib nodes, ...) get real Build verification.
+          for f in skills/nodecoda-workflow/examples/*.ncoda; do
+            echo "=== building $f ==="
+            node scripts/live-mcp.mjs --source "$f" || { echo "::error::build failed: $f"; exit 1; }
+          done
           test -n "$(ls artifacts/*.yaml 2>/dev/null)" || { echo "::error::no artifact produced"; exit 1; }
-          echo "E2E OK: live build produced $(ls artifacts/*.yaml | head -1)"
+          echo "E2E OK: $(ls artifacts/*.yaml | wc -l) artifacts produced"
