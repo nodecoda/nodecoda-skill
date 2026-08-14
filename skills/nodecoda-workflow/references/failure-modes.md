@@ -104,6 +104,14 @@ QUEUED ──▶ BUILDING ──▶ SUCCEEDED (终态)
 
 **正确反应**:停止,报告用户,引导订阅/付费/管理后台。**严禁**通过删代码"省配额"。
 
+## 客户端/环境层 HTTP 错误（不是 Source 诊断）
+
+`401 NO_KEY`、`400 WORKFLOW_BUILD_REQUEST_INVALID` 等来自网关/客户端的错误**不属于** `failure_kind`，不是 Source 修复信号：
+
+- `401 NO_KEY`：MCP server 未继承 `NODECODA_KEY` → 走「公共部署 · REST 直连回退」（SKILL.md），或在启动 agent 的 shell 导出 key。
+- `400 WORKFLOW_BUILD_REQUEST_INVALID`（REST 直连时）：缺 `Idempotency-Key` 请求头 → 补 header（见 gotchas G14）。
+- 上述情况下**不要**改 Source、不要伪造构建成功、不要编造 build_id。
+
 ## availability=UNAVAILABLE
 
 不是终态,带 `retry_after_seconds` 时:

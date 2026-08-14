@@ -1,5 +1,23 @@
 # Changelog — nodecoda-workflow skill
 
+## [Unreleased]
+
+### Added
+- **REST 直连回退指南**（SKILL.md「公共部署」）：MCP 工具返回 `401 NO_KEY`（stdio server 未继承 `NODECODA_KEY`）
+  时直接打公网网关的完整 curl 流程（提交/轮询/artifact 拉取），凭据只从环境读取。
+- **gotchas G13**：`else if` 链合法——`grammar.ebnf` 只显示 `else_clause_opt` 易误判，实证可链式。
+- **gotchas G14**：REST 直连缺 `Idempotency-Key` 请求头 → `400 WORKFLOW_BUILD_REQUEST_INVALID`
+  （幂等 key 必须 body + header 双份；MCP server 自动转发，直连不会）。
+- **failure-modes.md**：新增「客户端/环境层 HTTP 错误（不是 Source 诊断）」——`401 NO_KEY` / `400`
+  不改 Source、不伪造 build_id。
+
+### Changed
+- `references/mcp-contract.md`：Build 段补 `Idempotency-Key` header 双份要求；Poll 段补 REST 直连
+  artifact 需单独 `GET /v1/workflow-builds/{build_id}/artifact`。
+- `references/project-workflow.md`：补同 Source 重建完整状态链
+  `SUCCEEDED -> SOURCE_READY(--rev+1) -> BUILDING(--build-id) -> SUCCEEDED`（直接跳 SUCCEEDED 会非法）。
+- SKILL.md：`save-build` / `live-mcp` 补充 npx 等价调用形式（脚本在包内，非仓库根）。
+
 ## [0.2.15] — 2026-08-13
 
 ### Added

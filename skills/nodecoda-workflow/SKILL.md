@@ -57,6 +57,7 @@ NodeCoda Key 只存在于 MCP 客户端配置中。不要要求、读取、打�
 - `get_workflow_build`
 - `cancel_workflow_build`
 
+> **MCP 不可用时的回退**：若 MCP 工具返回 `401 NO_KEY`（stdio server 未继承 `NODECODA_KEY`）或工具未注册，不要伪造工具结果，也不要把凭据写进配置；直接走「公共部署 · REST 直连回退」，凭据只从环境读取。
 ## 工作流程
 
 ```text
@@ -178,6 +179,7 @@ Source 不超过 64 KiB；artifact 不超过 256 KiB；诊断最多 100 条。
 
 ```bash
 node scripts/save-build.mjs <build_id> --source builds/<build_id>/<source_filename> --out builds
+等价 npx 形式（脚本不在仓库 `scripts/` 时）：`npx -y @nodecoda/skill save-build <build_id> --source builds/<build_id>/<source_filename> --out builds`
 ```
 
 - 有界修复过程中，为每个 Source 版本保留快照：`builds/<build_id>/rev-<n>.ncoda`。
@@ -237,7 +239,7 @@ node scripts/save-build.mjs <build_id> --source builds/<build_id>/<source_filena
 # 直接 REST 演示；需要凭据
 NODECODA_EMAIL=... NODECODA_PASSWORD=... node scripts/live-mcp.mjs
 # 已有 sk-... 时
-NODECODA_KEY=sk-... node scripts/live-mcp.mjs
+NODECODA_KEY=sk-... node scripts/live-mcp.mjs（脚本在 `@nodecoda/skill` 包内；仓库无此脚本时用 `npx -y @nodecoda/skill live-mcp` 等价调用，更稳的是直接走下方 REST 回退）
 ```
 
 **MCP 客户端接入**（仓库根 `.codex/config.toml` 已内置 stdio 适配）：
@@ -253,3 +255,29 @@ startup_timeout_sec = 5
 该 stdio server 把 `build_dify_workflow` / `get_workflow_build` / `cancel_workflow_build` 三个工具转给公网 Workspace API；读 `NODECODA_KEY` 环境变量。
 
 **仍未走 MCP 直连的场景**：用户侧若希望 Codex 直接 JSON-RPC 2.0 打 `https://www.nodecoda.com/mcp`，需要在 Cloudflare/Caddy 把 `/mcp` 路由到 MCP 后端。当前的 stdio 适配绕开了这层依赖，是"先打通"的稳妥路径。
+
+
+### REST 直连回退（MCP 401 NO_KEY / 工具缺失时）
+
+MCP stdio server 通过 `process.env.NODECODA_KEY` 取 key；若启动 agent 的 shell 已导出 key 但 MCP 仍报 `NO_KEY`，通常是 server 进程未继承环境。此时直接打公网网关（base `https://www.nodecoda.com/v1`），凭据只从环境读取、绝不打印/落盘：
+
+```bash
+# 1) 提交 Build —— 关键：idempotency_key 必须「body 内」和「Idempotency-Key 请求头」各一份，
+#    只放 body 会返回 400 WORKFLOW_BUILD_REQUEST_INVALID（实证 2026-08-14）。
+curl -sS -X POST https://www.nodecoda.com/v1/workflow-builds \
+  -H "Authorization: Bearer $NODECODA_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: <project>-rev-<n>-<ts>" \
+  --data @/tmp/build-body.json
+# body: {"source","source_filename","language_identity","target_profile","idempotency_key"}
+
+# 2) 轮询（QUEUED/BUILDING -> SUCCEEDED|FAILED|CANCELLED）
+curl -sS -H "Authorization: Bearer $NODECODA_KEY" \
+  https://www.nodecoda.com/v1/workflow-builds/<build_id>
+
+# 3) SUCCEEDED 后单独拉 artifact（网关只回 metadata，内容在 artifact 端点）
+curl -sS -H "Authorization: Bearer $NODECODA_KEY" \
+  https://www.nodecoda.com/v1/workflow-builds/<build_id>/artifact
+```
+
+响应统一为 `{ "code": 0, "message": "...", "data": { ... } }` 信封，取 `data` 字段。

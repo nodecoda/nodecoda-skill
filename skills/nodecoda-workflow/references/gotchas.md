@@ -118,6 +118,16 @@
   ```
   - `terminate` — 遇错终止；`keep_null` — 失败项保留为 null；`remove_failed` — 失败项剔除。
 
+## G13. `else if` 链合法（勿按 EBNF 误判）
+- **现象**：想写 `if ... else if ... else`，查 `grammar.ebnf` 只见 `if_stmt = "if" "(" expression ")" block else_clause_opt`，怀疑不支持链式。
+- **原因**：EBNF 是简化写法，`else_clause_opt` 实际可承接嵌套 `if`。
+- **正确写法**：`else if (cond) { ... } else { ... }` 直接可用（实证：`ticket-triage` 用 `else if` 构建通过，0 诊断）。
+
+## G14. REST 直连缺 `Idempotency-Key` header — 400 WORKFLOW_BUILD_REQUEST_INVALID
+- **现象**：按 mcp-contract.md 的 body 示例直连 `POST /v1/workflow-builds`，返回 `400` / `WORKFLOW_BUILD_REQUEST_INVALID`；以为是 idempotency_key 含非法字符，换纯字母数字 key 仍 400。
+- **原因**：公网网关要求幂等 key **双份**——body `idempotency_key` + `Idempotency-Key` 请求头；MCP server 自动转发，REST 直连不会。
+- **正确写法**：curl 加 `-H "Idempotency-Key: <key>"`，与 body 同值。
+
 ## 排查顺序
 1. 按 error code 定位到上面某条(不全时配 `diagnostics-map.md`)。
 2. 若文档与现象不符 → **先跑最小复现探针**(一个最小文件单向验证),隔离【声明顺序】vs【构造不支持】,别猜。

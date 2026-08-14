@@ -56,6 +56,8 @@ created_at: "2026-08-12T..."
 
 `rev` auto-increments on `NEEDS_FIX->SOURCE_READY` and `SUCCEEDED->SOURCE_READY` unless `--rev` is given.
 
+> **重建（同 Source 仅重编译）完整链（实证 2026-08-14）**：`SUCCEEDED -> SOURCE_READY (--rev +1) -> BUILDING (--build-id <新id>) -> SUCCEEDED (--sha256 <hash>)`。直接 `set-state SUCCEEDED` 会报 `illegal transition: SUCCEEDED -> SUCCEEDED`；每一步都不可跳过。同 Source 重建也要新 `idempotency_key`（如 `<project>-rev-<n>-<ts>`），否则网关返回旧 build。
+
 ## Commands
 
 ```bash

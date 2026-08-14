@@ -26,6 +26,8 @@ A successful admission returns `QUEUED`, a `build_id`, the selected identity fie
 
 The same idempotency key is valid only for an exact replay. Any Source, filename, language identity, or target profile change requires a new key.
 
+> **Header 要求（实证 2026-08-14）**：公网网关要求幂等 key **同时**出现在 body 的 `idempotency_key` 字段和 `Idempotency-Key` 请求头中；只放 body 直连 REST 会返回 `400 WORKFLOW_BUILD_REQUEST_INVALID`。MCP server 已自动双份转发，REST 直连必须自己带 header。
+
 ## Poll
 
 Call `get_workflow_build`:
@@ -39,6 +41,8 @@ Call `get_workflow_build`:
 Continue polling `QUEUED`, `BUILDING`, or `CANCELLING`. Terminal states are `SUCCEEDED`, `FAILED`, and `CANCELLED`. `availability=UNAVAILABLE` is also a stop condition unless bounded retry guidance is present.
 
 A successful response contains an `artifact` with `media_type`, `sha256`, and `content`. The public gateway's poll response carries only artifact *metadata* (`artifact_sha256`, `artifact_size`, `artifact_media_type`, `artifact_available`) and serves the raw content at `GET /v1/workflow-builds/{build_id}/artifact`; the MCP servers fetch that endpoint best-effort on `SUCCEEDED` and attach it as `artifact.content` so the contract shape holds. Treat Source as the source of truth and the artifact as generated target-specific output.
+
+> **REST 直连拉取 artifact**：直连 REST 时 poll 响应只带 metadata，内容需另行 `GET /v1/workflow-builds/{build_id}/artifact`（MCP server 会在 SUCCEEDED 时 best-effort 拉取并拼成 `artifact.content`，直连时无此便利）。
 
 On `FAILED`, use `failure_kind` and structured `diagnostics`. Repair Source only for deterministic Source diagnostics. Target, policy, timeout, service, or data-integrity failures are not evidence for a Source edit.
 
