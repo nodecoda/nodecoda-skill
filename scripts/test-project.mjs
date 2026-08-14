@@ -56,6 +56,34 @@ let threw = false;
 try { await P.setState(dir, 'SUCCEEDED'); } catch { threw = true; }  // SOURCE_READY->SUCCEEDED illegal
 ok('illegal SOURCE_READY->SUCCEEDED throws', threw);
 
+// --- flag enforcement (review: docs must not overstate the state machine) ---
+threw = false;
+try { await P.setState(dir, 'BUILDING'); } catch { threw = true; }   // SOURCE_READY->BUILDING without --build-id
+ok('BUILDING without --build-id throws', threw);
+await P.setState(dir, 'BUILDING', { buildId: 'job_3' });
+threw = false;
+try { await P.setState(dir, 'SUCCEEDED'); } catch { threw = true; }  // BUILDING->SUCCEEDED without --sha256
+ok('SUCCEEDED without --sha256 throws', threw);
+
+// --- rebuild guidance surfaces only for SUCCEEDED, with the full chain ---
+await P.setState(dir, 'SUCCEEDED', { sha256: 'def' });
+threw = false;
+let msg = '';
+try { await P.setState(dir, 'SUCCEEDED'); } catch (e) { threw = true; msg = e.message; }
+ok('SUCCEEDED->SUCCEEDED throws', threw);
+const chainOk = msg.includes('Legal targets from SUCCEEDED: SOURCE_READY, CANCELLED')
+  && msg.includes('SUCCEEDED -> SOURCE_READY (rev+1) -> BUILDING (--build-id <id>) -> SUCCEEDED (--sha256 <hash>)');
+ok('SUCCEEDED->SUCCEEDED error shows legal targets + full rebuild chain', chainOk);
+
+// --- terminal states: legal list is empty and no rebuild hint ---
+await P.setState(dir, 'CANCELLED');  // SUCCEEDED->CANCELLED is legal
+threw = false;
+let msg2 = '';
+try { await P.setState(dir, 'SOURCE_READY'); } catch (e) { threw = true; msg2 = e.message; }
+ok('terminal-state illegal transition throws', threw);
+ok('non-rebuild error omits the rebuild chain hint', !msg2.includes('To rebuild'));
+ok('empty legal list renders as (none)', /Legal targets from CANCELLED: \(none\)/.test(msg2));
+
 // --- resolve ---
 eq('resolve finds project', (await P.resolve(dir)).project, true);
 const dir2 = await mkdtemp(join(tmpdir(), 'nc-empty-'));

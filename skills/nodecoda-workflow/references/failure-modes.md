@@ -28,6 +28,18 @@ QUEUED ──▶ BUILDING ──▶ SUCCEEDED (终态)
 
 `DATA_INTEGRITY`(隐含在 artifact 缺失/不一致场景):**绝不能补值或猜测默认 target**,直接停止。
 
+## 认证 / 配置失败(工具调用 401)
+
+MCP 工具存在但调用直接返回 `401 NO_KEY` 时,**不是凭据/配置缺失问题,而是环境传播问题**:
+
+| 错误 | 含义 | 排查与动作 |
+|------|------|-----------|
+| `401 NO_KEY` | MCP server 在请求时读 `process.env.NODECODA_KEY` 为空 | ① 在你**实际启动 Codex 的那个 shell** 里 `echo $NODECODA_KEY`——GUI/其他终端启动的 Codex 不继承别的 shell profile;② 在 `config.toml` 的 `[mcp_servers.nodecoda]` 加 `env = { NODECODA_KEY = "${NODECODA_KEY}" }` 显式传入 stdio 子进程;③ 重启 agent 会话后重试 |
+| `401 UNAUTHORIZED` | key 存在但无效/被拒(如本地栈拒远程 key) | 核对 key 属于当前后端;本地 dev stack 只认本地数据库里的 sk- key(见 `.codex/config.example.toml` Alternative 3) |
+| `401 UNAUTHORIZED`,响应里带字面量 `Bearer ${NODECODA_KEY}` | Codex 版本未做 `env` 值展开,把 `${...}` 当字面量发出去 | 升级 Codex;或直接在 `env` 块/客户端配置里写实际 key 值;或改用 `bearer_token_env_var = "NODECODA_KEY"`(HTTP 传输) |
+
+**不绕过**:key 缺失时报告安装/环境指引,不要猜测凭据、不把 key 写进 Source / prompt / artifact / 报告。
+
 ## 各 kind 的诊断模板
 
 ### SOURCE_INVALID

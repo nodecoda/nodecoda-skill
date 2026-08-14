@@ -99,11 +99,26 @@ One question at a time, intent-first, max 5 rounds. If input/output/mode/boundar
 ```
 SOURCE_READY -> build_dify_workflow(idempotency_key=<project>-rev-<n>)
   -> poll get_workflow_build (<=180s, admission <=3)
-  -> SUCCEEDED: node scripts/save-build.mjs <build_id> --source src/<name>.ncoda --out builds
+  -> SUCCEEDED: npx -y @nodecoda/skill save-build <build_id> --source src/<name>.ncoda --out builds
        + set-state SUCCEEDED --sha256 <hash>
   -> NEEDS_FIX: set-state NEEDS_FIX --diagnostics '<json>'; edit src; set-state SOURCE_READY (rev+1); loop <=5
   -> FAILED/CANCELLED: terminal, keep diagnostics
 ```
+
+## Rebuild protocol (重新编译已交付的流程)
+
+`SUCCEEDED` 是**终态**,直接再 `set-state SUCCEEDED` 是 illegal transition。要重建,必须走完整链(每一跳都被状态机校验,**不能跳步**):
+
+```bash
+# SUCCEEDED -> SOURCE_READY(rev 自动 +1,除非 --rev)
+npx -y @nodecoda/skill project set-state ./my-flow SOURCE_READY
+# SOURCE_READY -> BUILDING(必须带新 build-id)
+npx -y @nodecoda/skill project set-state ./my-flow BUILDING --build-id <new_build_id>
+# BUILDING -> SUCCEEDED(带新 sha256)
+npx -y @nodecoda/skill project set-state ./my-flow SUCCEEDED --sha256 <hash>
+```
+
+注意:新 rev 用**新幂等 key**(`<project>-rev-<n+1>`)。`set-state` 拒绝非法转移时会打印合法去向与本节链接。
 
 ## Hash fidelity
 

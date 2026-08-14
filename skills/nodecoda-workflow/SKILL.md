@@ -37,11 +37,13 @@ description: Use when designing, writing, building, diagnosing, or revising Node
 
 **精简澄清**：一次一问、意图优先（用途/输入输出/模式与依赖/边界与异常）、≤5 轮，结论落盘 `design.md`。需求已清晰可提前进入 DESIGNED。
 
-**生命周期状态机**：`INIT -> CLARIFYING -> DESIGNED -> SOURCE_READY -> BUILDING -> SUCCEEDED`；失败走 `NEEDS_FIX` 修复循环（≤5 次），成功后改源码可重新编译（`SUCCEEDED -> SOURCE_READY`，rev+1）。转换经 `npx -y @nodecoda/skill project set-state` 校验。
+**生命周期状态机**：`INIT -> CLARIFYING -> DESIGNED -> SOURCE_READY -> BUILDING -> SUCCEEDED`；失败走 `NEEDS_FIX` 修复循环（≤5 次）。成功后改源码可重新编译，但 `SUCCEEDED` 不可原地重入——重建必须经 `SOURCE_READY`（rev+1）走全链
+`SOURCE_READY(--rev+1) → BUILDING(--build-id) → SUCCEEDED(--sha256)`，不能直接 `SUCCEEDED -> SUCCEEDED`（见 `references/project-workflow.md` "Rebuild protocol"）。
+转换经 `npx -y @nodecoda/skill project set-state` 校验。
 
 **恢复**：会话中断后 `npx -y @nodecoda/skill project get-state .` 回到对应阶段，不重问需求。
 
-**产物保存**：SUCCEEDED 后 `save-build.mjs <build_id> --source src/<name>.ncoda --out builds` 落盘到 `builds/<build_id>/`。
+**产物保存**：SUCCEEDED 后 `npx -y @nodecoda/skill save-build <build_id> --source src/<name>.ncoda --out builds` 落盘到 `builds/<build_id>/`（仓库 clone 内也可用 `node scripts/save-build.mjs`）。
 
 **轻量模式（可选）**：只验证 `.ncoda` 片段、排查单点时不建项目，但需声明"这是临时验证"。完整规则见 `references/project-workflow.md`。
 
@@ -178,8 +180,8 @@ Source 不超过 64 KiB；artifact 不超过 256 KiB；诊断最多 100 条。
 - 一键落盘（环境已配置 `NODECODA_KEY` 时；未配置时直接用 MCP 返回的 artifact/record 写同路径文件）：
 
 ```bash
-node scripts/save-build.mjs <build_id> --source builds/<build_id>/<source_filename> --out builds
-等价 npx 形式（脚本不在仓库 `scripts/` 时）：`npx -y @nodecoda/skill save-build <build_id> --source builds/<build_id>/<source_filename> --out builds`
+npx -y @nodecoda/skill save-build <build_id> --source builds/<build_id>/<source_filename> --out builds
+# 仓库 clone 内也可用 node scripts/save-build.mjs
 ```
 
 - 有界修复过程中，为每个 Source 版本保留快照：`builds/<build_id>/rev-<n>.ncoda`。
@@ -237,9 +239,10 @@ node scripts/save-build.mjs <build_id> --source builds/<build_id>/<source_filena
 
 ```bash
 # 直接 REST 演示；需要凭据
-NODECODA_EMAIL=... NODECODA_PASSWORD=... node scripts/live-mcp.mjs
+NODECODA_EMAIL=... NODECODA_PASSWORD=... npx -y @nodecoda/skill live-mcp
 # 已有 sk-... 时
-NODECODA_KEY=sk-... node scripts/live-mcp.mjs（脚本在 `@nodecoda/skill` 包内；仓库无此脚本时用 `npx -y @nodecoda/skill live-mcp` 等价调用，更稳的是直接走下方 REST 回退）
+NODECODA_KEY=sk-... npx -y @nodecoda/skill live-mcp
+# 仓库 clone 内也可用 node scripts/live-mcp.mjs；更稳的是直接走下方 REST 回退
 ```
 
 **MCP 客户端接入**（仓库根 `.codex/config.toml` 已内置 stdio 适配）：

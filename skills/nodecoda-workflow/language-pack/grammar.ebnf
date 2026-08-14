@@ -29,6 +29,7 @@ statement          = if_stmt | for_stmt | while_stmt | return_stmt | yield_stmt 
                    | parallel_stmt | attempt_stmt | request_input_stmt | break_stmt | continue_stmt
                    | typed_var_decl | var_decl | output_stmt | expr_or_assign_stmt ;
 if_stmt            = "if" "(" expression ")" block else_clause_opt ;
+else_clause_opt    = /* empty */ | "else" block | "else" if_stmt ;   // else-if 链合法,见 examples/05-conditional-output.ncoda
 for_stmt           = "for" "(" for_var "in" expression ")" block ;
 while_stmt         = "while" "(" expression ")" "limit" INT block ;    // limit required
 return_stmt        = "return" [expression] ";" ;

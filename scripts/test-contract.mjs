@@ -175,6 +175,7 @@ async function checkDistributionCompleteness() {
   const cliRefs = [
     ...[...cli.matchAll(/join\(__dirname,\s*'([^']+\.mjs)'\)/g)].map((m) => m[1]),
     ...[...cli.matchAll(/import\('\.\/([^']+\.mjs)'\)/g)].map((m) => m[1]),
+    ...[...cli.matchAll(/runScript\('([^']+\.mjs)'\)/g)].map((m) => m[1]),
   ];
   const cliMissing = [...new Set(cliRefs)].filter((r) => !files.has(`scripts/${r}`) || !existsSync(join(REPO_ROOT, 'scripts', r)));
   if (cliMissing.length === 0) ok('distribution: every script cli.mjs executes is shipped');
@@ -565,6 +566,10 @@ async function smokeCliProject() {
     const sb = spawnSync(process.execPath, [join(REPO_ROOT, 'scripts/cli.mjs'), 'save-build'], { cwd: tmp, encoding: 'utf8' });
     if (sb.status !== 0) ok('cli save-build routes (usage on missing args)');
     else bad('cli save-build routes', 'status=0');
+
+    const lm = spawnSync(process.execPath, [join(REPO_ROOT, 'scripts/cli.mjs'), 'live-mcp', '--dry-run'], { cwd: tmp, encoding: 'utf8' });
+    if (lm.status === 0 && /live workflow build/.test(lm.stdout || '')) ok('cli live-mcp routes (--dry-run exits 0)');
+    else bad('cli live-mcp routes', `status=${lm.status} out=${(lm.stdout || '').slice(0, 200)}`);
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }

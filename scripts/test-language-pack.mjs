@@ -57,5 +57,20 @@ badList.length ? bad('version.json source_docs resolve to references/', `missing
     : bad('source-doc drift detected', `status=${drift.status} ${drift.stdout}${drift.stderr}`);
 }
 
+// 5. grammar reference-completeness guard (review WATCH-1): the checker that
+//    would have caught the else_clause_opt drift (referenced but undefined).
+{
+  const { findUndefinedNonterminals } = await import(join(REPO_ROOT, 'scripts/grammar-coverage.mjs'));
+  const d1 = findUndefinedNonterminals('rule_a = "if" undef_x ;\n');
+  ok('dangling nonterminal flagged', d1.undefinedRefs.includes('undef_x'));
+  const d2 = findUndefinedNonterminals('rule_a = field_list ;\n', ['field_list']);
+  ok('allowlisted omission not flagged', d2.undefinedRefs.length === 0);
+  const d3 = findUndefinedNonterminals('field_list = IDENTIFIER ;\n', ['field_list']);
+  ok('stale allowlist entry flagged', d3.staleAllowlist.includes('field_list'));
+  const real = await readFile(join(PACK, 'grammar.ebnf'), 'utf8');
+  const d4 = findUndefinedNonterminals(real);
+  ok('real grammar.ebnf has no undefined refs beyond allowlist', d4.undefinedRefs.length === 0);
+}
+
 console.log(`\nOK   ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed - Project Mode set-state 旗标强制 + 重建链指引；grammar 悬空非终结符守卫；live-mcp CLI 接线（v0.2.20）
+
+- `project set-state` 旗标强制（实证回写，防止文档高估状态机）：
+  `BUILDING` 必须带 `--build-id`、`SUCCEEDED` 必须带 `--sha256`；非法转移错误现在
+  打印合法去向，`SUCCEEDED` 终态额外给出完整重建链
+  `SOURCE_READY(rev+1) → BUILDING(--build-id) → SUCCEEDED(--sha256)` 与文档链接。
+- 新增 `scripts/grammar-coverage.mjs` 守卫：检测 `grammar.ebnf` 引用但未定义且不在
+  已知省略 allowlist 的非终结符（`else_clause_opt` 类漂移），接入
+  `validate-language-pack.mjs` 与 `test-language-pack.mjs`；修复包内
+  `else_clause_opt` 漂移并重新生成 language pack（version.json hash 更新）。
+- CLI 新增 `live-mcp` 命令接线（`nodecoda-skill live-mcp`，仓库 clone 内亦可
+  `node scripts/live-mcp.mjs`）；`test-contract.mjs` 分发完整性检查补
+  `runScript(...)` 引用解析 + dry-run 路由冒烟。
+- 文档：MCP stdio 子进程 `NODECODA_KEY` 环境传播指引（`config.example.toml`、
+  `installation.md`）、`failure-modes.md` 401 排查表、`mcp-contract.md`
+  Idempotency-Key 双份一致传输要求、`project-workflow.md` Rebuild protocol、
+  `public-service.md` 网关行为汇总表；SKILL.md 统一改用 npx 命令示例。
+
 ### Added - 示例语法校验门 + 4 个新示例 (v0.2.16)
 
 **校验门（治理先行）**：

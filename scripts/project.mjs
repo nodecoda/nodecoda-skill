@@ -63,7 +63,20 @@ export async function getState(dir) {
 export async function setState(dir, to, opts = {}) {
   const state = await getState(dir);
   const from = state.phase;
-  if (!validateTransition(from, to)) throw new Error(`illegal transition: ${from} -> ${to}`);
+  if (!validateTransition(from, to)) {
+    const legal = (TRANSITIONS[from] ?? []).join(', ') || '(none)';
+    const msg = `illegal transition: ${from} -> ${to}. Legal targets from ${from}: ${legal}.`;
+    if (from === 'SUCCEEDED') {
+      throw new Error(`${msg} To rebuild, walk the full chain: SUCCEEDED -> SOURCE_READY (rev+1) -> BUILDING (--build-id <id>) -> SUCCEEDED (--sha256 <hash>) — see references/project-workflow.md "Rebuild protocol".`);
+    }
+    throw new Error(msg);
+  }
+  if (to === 'BUILDING' && opts.buildId === undefined) {
+    throw new Error('set-state BUILDING requires --build-id <id>: the resume protocol polls get_workflow_build with current_build_id. See references/project-workflow.md "Rebuild protocol".');
+  }
+  if (to === 'SUCCEEDED' && opts.sha256 === undefined) {
+    throw new Error('set-state SUCCEEDED requires --sha256 <hash>: hash fidelity checks compare source_sha256 to the saved src file. See references/project-workflow.md "Rebuild protocol".');
+  }
   let rev = state.rev;
   if (to === 'SOURCE_READY' && (from === 'NEEDS_FIX' || from === 'SUCCEEDED') && opts.rev === undefined) rev = state.rev + 1;
   if (opts.rev !== undefined) rev = opts.rev;

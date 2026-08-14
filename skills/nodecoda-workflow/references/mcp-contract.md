@@ -16,6 +16,14 @@ Call `build_dify_workflow` with all fields present:
 }
 ```
 
+> **Transport requirement (live gateway, verified 2026-08-14):** the gateway
+> requires the `Idempotency-Key` HTTP header to **echo** the body
+> `idempotency_key` — sending it in only one place is rejected with
+> `400 WORKFLOW_BUILD_REQUEST_INVALID`. The MCP servers in this repo
+> (`mcp-stdio-server.mjs`, `mcp-http-server.mjs`) already forward both, so MCP
+> callers need to do nothing extra; **direct REST callers must set both** (see
+> `references/public-service.md` for the curl form).
+
 A successful admission returns `QUEUED`, a `build_id`, the selected identity fields, and `poll_after_ms`. An unavailable admission returns `availability=UNAVAILABLE`, a `failure_kind`, and sometimes `retry_after_seconds`; it does not return a usable Build identity.
 
 > Live gateway note (verified 2026-08-12): the public gateway wraps every

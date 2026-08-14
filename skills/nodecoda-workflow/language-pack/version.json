@@ -11,7 +11,7 @@
     "references/gotchas.md"
   ],
   "hashes": {
-    "grammar.ebnf": "61d6b235b97acda9282b861791a1fd9466497d944c4b64416ef33ce2a92c5ccb",
+    "grammar.ebnf": "227ad3fa247e9b9a8beca533ced6f1528dc0e43af353e4e6ee42a783fe3179cb",
     "builtins.json": "4a9f8ce2f130bbec4f3e8a3d709eca38bd0fb9a27abea8ab3a49070c8671338a",
     "diagnostics.json": "27cc5ccfc74b52c1da51ed9539efc472d958880c8c7a6a57630bf9be6919bcc4",
     "targets/dify-1.16-graphon-0.6.json": "5cc722dc34a52cfd5abc165f0a669baffa56ba56d9bc6a9d356dc209a279c777",

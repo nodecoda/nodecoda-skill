@@ -7,6 +7,10 @@
 //   3. builtins/diagnostics/targets/antipatterns reference documents that exist
 //   4. version.json source_hashes match the source references (raw-text sha256)
 //      -> detects version drift: references changed without pack regeneration
+//   5. grammar.ebnf references no nonterminals that are neither defined in the
+//      pack nor in the known-omission allowlist (grammar-coverage.mjs)
+//      -> detects the else_clause_opt class: pack references a rule it forgot
+//         to define
 // Pure Node 18+ built-ins, no dependencies.
 //
 // Usage:
@@ -19,6 +23,7 @@ import { existsSync } from 'node:fs';
 import { join, resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { findUndefinedNonterminals } from './grammar-coverage.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -96,6 +101,19 @@ async function validatePack(skillName) {
     const actualSrc = hashText(await readFile(p));
     if (actualSrc !== expectSrc) {
       err(`${skillName}: source doc changed since pack generation: ${rel} (re-extract language pack + recompute version.json)`);
+    }
+  }
+
+  // grammar.ebnf reference-completeness: no dangling nonterminals beyond the
+  // known-omission allowlist (guards the else_clause_opt class of drift).
+  const grammarPath = join(packDir, 'grammar.ebnf');
+  if (existsSync(grammarPath)) {
+    const { undefinedRefs, staleAllowlist } = findUndefinedNonterminals(await readFile(grammarPath, 'utf8'));
+    if (undefinedRefs.length) {
+      err(`${skillName}: grammar.ebnf references nonterminals neither defined in the pack nor allowlisted: ${undefinedRefs.join(', ')} (define them in grammar.ebnf or add to PACK_OMITTED_NONTERMINALS in scripts/grammar-coverage.mjs)`);
+    }
+    if (staleAllowlist.length) {
+      err(`${skillName}: grammar.ebnf now defines allowlist entries — remove from PACK_OMITTED_NONTERMINALS: ${staleAllowlist.join(', ')}`);
     }
   }
 }

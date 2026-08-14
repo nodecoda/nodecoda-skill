@@ -80,6 +80,16 @@ enabled = true
 - **key 必须存在于后端数据库**：格式正确但不存在的 `sk-...` 也会 401；`/health 200` 不代表 Build 链路可用——MCP gateway 可能在线但仍拒绝 opaque key（见 `scripts/live-mcp.mjs` 的 `WORKFLOW_BUILD_SERVICE_UNAVAILABLE` 处理）；不要为了绕过错误而修改 `.ncoda` Source。
 - **自托管参考实现**：生产后端与 `scripts/mcp-http-server.mjs` 行为略有差异（生产返回 `text/plain` 401，本仓库 server 返回 JSON-RPC error envelope）；两者都遵循同一 MCP 契约，客户端无需区分。
 
+### Observed gateway behaviors（汇总，人工实测非 CI 钉死）
+
+网关行为是**外部契约**，本仓库无法静态持有，用日期注记诚实记录。以下为全仓库分散注记的单一汇总点；新发现请在此加行，并让对应文档引用本表：
+
+| 行为 | 观察位置 | 验证日期 |
+|------|---------|---------|
+| 每个响应包 `{ code, message, data }` envelope | `references/mcp-contract.md` "Live gateway note" | 2026-08-12 |
+| `/mcp` 路由已生效（不再被 SPA catch-all 接管） | `.codex/config.example.toml`、`docs/installation.md`、本页"状态与故障提示" | 2026-08-12 |
+| `Idempotency-Key` header 必须与 body `idempotency_key` 双份一致（单份 400） | `references/mcp-contract.md` "Transport requirement"、本页 REST curl | 2026-08-14 |
+
 ## 客户端配置
 
 两种接入方式，任选其一：

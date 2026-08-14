@@ -77,8 +77,10 @@ ls "$DEST"      # 应该能看到 SKILL.md、manifest.json、references/、examp
 
 ```bash
 cp .codex/config.example.toml .codex/config.toml
-export NODECODA_KEY=sk-...   # 加到你的 shell profile
+export NODECODA_KEY=sk-...   # 加到「实际启动 Codex 的那个 shell」的 profile
 ```
+
+> **重要**：MCP 子进程只继承启动 Codex 的那个进程的环境——经 GUI / 其他终端启动的 Codex 不会自动继承别的 shell profile。stdio 方式建议在 `[mcp_servers.nodecoda]` 里加 `env = { NODECODA_KEY = "${NODECODA_KEY}" }` 显式传入；排查见 `references/failure-modes.md`「认证 / 配置失败」。
 
 **零安装替代**（不 clone、不本地 npm install）——让 Codex 每次会话按需拉取：
 
@@ -86,6 +88,7 @@ export NODECODA_KEY=sk-...   # 加到你的 shell profile
 [mcp_servers.nodecoda]
 command = "npx"
 args = ["-y", "@nodecoda/skill", "mcp"]
+env = { NODECODA_KEY = "${NODECODA_KEY}" }   # 显式传给 stdio 子进程(见上方提示)
 enabled = true
 ```
 

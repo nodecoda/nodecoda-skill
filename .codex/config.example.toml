@@ -29,12 +29,19 @@ startup_timeout_sec = 5
 # == Alternative 1: npx zero-install stdio (no clone, no local install) =====
 # Codex runs `npx -y @nodecoda/skill mcp` on session start — the npm package
 # is fetched on demand. The key is read from the NODECODA_KEY environment
-# variable at request time (export it in your shell profile; it never lives
-# in this file). Requires the package on the npm registry (v0.2.0+).
+# variable at request time.
+# **重要**:MCP 子进程只能看到「启动 Codex 的那个进程」的环境——务必在你实际
+# 启动 Codex 的 shell 里 export(经 GUI / 其他终端启动的 Codex 不会自动继承
+# 别的 shell profile)。显式 env 块可把 key 传入子进程;它仍不落盘本文件。
+# Requires the package on the npm registry (v0.2.0+).
 #
 # [mcp_servers.nodecoda]
 # command = "npx"
 # args = ["-y", "@nodecoda/skill", "mcp"]
+# env = { NODECODA_KEY = "${NODECODA_KEY}" }   # stdio 子进程只继承 Codex 启动进程的环境;
+#                                               # Windows/Desktop 端会对 MCP 子进程过滤环境变量,
+#                                               # 显式 env 块确保 key 传入(POSIX 子进程本就继承);
+#                                               # 未设置时仍为 401 NO_KEY
 # enabled = true
 # startup_timeout_sec = 5
 
@@ -68,5 +75,6 @@ startup_timeout_sec = 5
 # [mcp_servers.nodecoda]
 # command = "node"
 # args = ["scripts/mcp-stdio-server.mjs"]
+# env = { NODECODA_KEY = "${NODECODA_KEY}" }   # 同上:显式传给 stdio 子进程
 # enabled = true
 # startup_timeout_sec = 5
