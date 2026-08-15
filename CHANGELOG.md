@@ -5,6 +5,22 @@ All notable changes to this distribution repository will be documented in this f
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.26] - 2026-08-15
+
+### Added - 打包完整性校验测试 + device-id 漏包回归 (test-package-integrity)
+
+新增 `scripts/test-package-integrity.mjs`(接入 `npm test` / `test:all`,含独立
+`test:package`),锁定 0.2.21..0.2.24 的 `scripts/device-id.mjs` 漏包 bug:
+- 白名单健全性:package.json `files` 每个条目都真实存在,展开为打包文件集合;
+- 具体回归:`scripts/device-id.mjs` ∈ 白名单,且 `mcp-core.mjs` 仍 import 它
+  (回归保持活跃);
+- 依赖完整性:打包集合内全部 `.mjs` 的静态相对 import 目标都 ∈ 打包集合
+  (防漏包同类问题);
+- CLI 分发完整性:`cli.mjs` 每个 `runScript('<name>.mjs')` 子命令目标已打包;
+- 真实加载 smoke:把白名单复制到临时目录后 `import mcp-core.mjs` 必须不抛
+  `ERR_MODULE_NOT_FOUND`(精确复现旧 bug 的失败模式),`device-id.mjs` 可加载。
+- 负向验证:临时移除白名单条目 → 测试以失败退出(exit 1),恢复后全绿。
+
 ## [0.2.25] - 2026-08-15
 
 ### Changed - 版本管理简化：build 产物平铺覆盖式，不再按 build_id 建目录
