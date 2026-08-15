@@ -5,6 +5,16 @@ All notable changes to this distribution repository will be documented in this f
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.30] - 2026-08-15
+
+### Changed - SkillHub 发布脚本对接 skillhub.cn 真实 CLI(修正 0.2.29 误用 @astron-team/skillhub)
+
+- scripts/publish-skillhub.mjs 按官方教程与 release.md 重做:build → 校验 SKILL.md 必填字段
+  (slug/version/displayName)→ skillhub auth whoami → skillhub publish <dir> --changelog。
+- SKILL.md frontmatter 补齐 slug/displayName/version/summary/license(平台发布必填)。
+- 测试精简为核心 6 条(假 CLI 注入,无网络无凭据)。
+- 已实际发布:nodecoda-workflow@0.2.30 → skillId=156703,平台审核中。
+
 ## [0.2.29] - 2026-08-15
 
 ### Added - SkillHub 一键自动发布(scripts/publish-skillhub.mjs)

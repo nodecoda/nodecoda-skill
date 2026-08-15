@@ -1,190 +1,115 @@
 #!/usr/bin/env node
-// scripts/publish-skillhub.mjs
-// One-command publish of a repo skill to SkillHub (skillhub.cn / skill.xfyun.cn).
+// scripts/publish-skillhub.mjs — 一键把仓库技能发布到 SkillHub (skillhub.cn)。
 //
-// Pipeline:
-//   1. BUILD — spawn scripts/build-skillhub.mjs --zip (whitelist-clean package
-//      + store-only zip; the script self-verifies whitelist/references/hashes
-//      and exits non-zero on any inconsistency).
-//   2. AUTH — resolve the SkillHub CLI (@astron-team/skillhub) and check
-//      `whoami` succeeds. Token priority is the CLI's own (--token >
-//      SKILLHUB_TOKEN > ~/.skillhub/credentials.json); this script never
-//      reads or writes credentials.
-//   3. PUBLISH — `skillhub publish <zip> --namespace <ns> [--visibility]`.
-//   4. REPORT — print the skill detail URL (or --json result).
+// 前置(一次性): curl -fsSL https://skillhub.cn/install/install.sh | bash -s -- --cli-only
+//               skillhub login --key skh_xxx --host https://api.skillhub.cn
 //
-// CLI resolution: SKILLHUB_CLI env override (tests), then `skillhub` on PATH,
-// then `npx -y @astron-team/skillhub`.
-//
-// Usage:
-//   node scripts/publish-skillhub.mjs --namespace <ns> [options]
-//     --namespace <ns>    required — SkillHub namespace (publish target)
-//     --visibility <v>    public (default) | namespace-only | private
-//     --skill <name>      skill dir name under skills/ (default nodecoda-workflow)
-//     --out <dir>         build output dir (default <repo>/build/skillhub)
-//     --registry <url>    registry override (default: CLI config)
-//     --token <token>     explicit token (forwarded to skillhub CLI)
-//     --cli <cmd>         explicit skillhub CLI command
-//     --dry-run           build + auth check only, do NOT publish
-//     --json              machine-readable result on stdout
-//     --help              show usage
-//
-// Exit codes (mirror skillhub CLI): 0 ok / 1 general / 2 auth / 5 usage.
+// 流程: build(白名单清理) → 校验 SKILL.md 必填字段(slug/version/displayName)
+//       → skillhub auth whoami → skillhub publish <dir> --changelog <text>
+// CLI 输出原样透传,不做二次解析。
+// 退出码: 0 成功 / 1 一般失败 / 2 未登录 / 5 用法错误或 CLI 缺失
 
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
 const BUILD_SCRIPT = join(__dirname, 'build-skillhub.mjs');
+const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-function usage() {
-  return [
-    'usage: node scripts/publish-skillhub.mjs --namespace <ns> [options]',
-    '',
-    '  --namespace <ns>    required — SkillHub namespace',
-    '  --visibility <v>    public (default) | namespace-only | private',
-    '  --skill <name>      skill dir under skills/ (default nodecoda-workflow)',
-    '  --out <dir>         build output dir (default <repo>/build/skillhub)',
-    '  --registry <url>    registry override',
-    '  --token <token>     explicit token (forwarded to skillhub CLI)',
-    '  --cli <cmd>         explicit skillhub CLI command',
-    '  --dry-run           build + auth check only, do NOT publish',
-    '  --json              machine-readable result',
-  ].join('\n');
-}
+const usage = () => [
+  '用法: node scripts/publish-skillhub.mjs [--changelog <text>] [--dry-run] [--json]',
+  '',
+  '  --skill <name>     技能目录 (默认 nodecoda-workflow)',
+  '  --out <dir>        build 输出目录 (默认 build/skillhub/<skill>)',
+  '  --changelog <text> 变更说明 (默认 v<version>)',
+  '  --dry-run          仅本地预检,不发布',
+  '  --json             JSON 输出',
+  '  --help             帮助',
+].join('\n');
 
 const args = process.argv.slice(2);
-const opts = {
-  namespace: null, visibility: 'public', skill: 'nodecoda-workflow',
-  out: join(REPO_ROOT, 'build', 'skillhub'), registry: null, token: null,
-  cli: null, dryRun: false, json: false,
-};
+const opts = { skill: 'nodecoda-workflow', out: null, changelog: null, dryRun: false, json: false };
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
   switch (a) {
-    case '--namespace': opts.namespace = args[++i]; break;
-    case '--visibility': opts.visibility = args[++i]; break;
     case '--skill': opts.skill = args[++i]; break;
     case '--out': opts.out = args[++i]; break;
-    case '--registry': opts.registry = args[++i]; break;
-    case '--token': opts.token = args[++i]; break;
-    case '--cli': opts.cli = args[++i]; break;
+    case '--changelog': opts.changelog = args[++i]; break;
     case '--dry-run': opts.dryRun = true; break;
     case '--json': opts.json = true; break;
     case '--help': case '-h': console.log(usage()); process.exit(0);
-    default:
-      console.error(`Unknown argument: ${a}\n\n${usage()}`);
-      process.exit(5);
+    default: console.error(`未知参数: ${a}\n\n${usage()}`); process.exit(5);
   }
 }
-if (!opts.namespace) {
-  console.error('error: --namespace <ns> is required\n\n' + usage());
-  process.exit(5);
-}
-if (!['public', 'namespace-only', 'private'].includes(opts.visibility)) {
-  console.error(`error: --visibility must be public | namespace-only | private (got ${opts.visibility})`);
-  process.exit(5);
+
+// ---------------------------------------------------------------- helpers
+
+export function parseFrontmatter(md) {
+  const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!m) return {};
+  const fm = {};
+  for (const line of m[1].split('\n')) {
+    const kv = line.match(/^([A-Za-z][A-Za-z0-9]*):\s*(.*)$/);
+    if (kv) fm[kv[1]] = kv[2].trim().replace(/^['"]|['"]$/g, '');
+  }
+  return fm;
 }
 
-// ------------------------------------------------------------- run helpers
-
-function run(cmd, argv, { cwd = REPO_ROOT } = {}) {
-  return spawnSync(cmd, argv, { cwd, encoding: 'utf8' });
+// 平台必填项(release.md): slug / version / displayName
+export function checkSkillFrontmatter(fm) {
+  const errs = [];
+  if (!fm.slug) errs.push('slug 必填');
+  else if (!KEBAB.test(fm.slug) || fm.slug.length < 2 || fm.slug.length > 128) errs.push(`slug 需为 kebab-case 2-128 字符 (当前 "${fm.slug}")`);
+  if (!fm.version) errs.push('version 必填');
+  else if (!SEMVER.test(fm.version)) errs.push(`version 需为 SemVer 如 1.0.0 (当前 "${fm.version}")`);
+  if (!fm.displayName) errs.push('displayName 必填');
+  return errs;
 }
+
+const run = (cmd, argv) => spawnSync(cmd, argv, { cwd: REPO_ROOT, encoding: 'utf8' });
 
 function resolveCli() {
-  if (opts.cli) return { cmd: opts.cli.split(/\s+/)[0], base: opts.cli.split(/\s+/).slice(1) };
   const env = process.env.SKILLHUB_CLI;
   if (env) return { cmd: env.split(/\s+/)[0], base: env.split(/\s+/).slice(1) };
-  if (run('skillhub', ['version']).status === 0) return { cmd: 'skillhub', base: [] };
-  return { cmd: 'npx', base: ['-y', '@astron-team/skillhub'] };
+  if (run('skillhub', ['--version']).status === 0) return { cmd: 'skillhub', base: [] };
+  return null;
 }
 
-function cliBaseArgs(...extra) {
-  const out = [...opts.cliBase];
-  if (opts.registry) out.push('--registry', opts.registry);
-  if (opts.token) out.push('--token', opts.token);
-  out.push(...extra);
-  return out;
-}
+const fail = (code, msg) => { console.error(`✖ ${msg}`); process.exit(code); };
 
-// `--json` only applies to the publish subcommand (machine-readable result);
-// auth/version probes stay plain. It is appended last so it never sits
-// between the subcommand and its operands (CLI parsers are strict about that).
-function cliArgs(...extra) {
-  const out = cliBaseArgs();
-  out.push(...extra);
-  if (opts.json) out.push('--json');
-  return out;
-}
-
-function fail(code, message) {
-  const r = { ok: false, exitCode: code, message };
-  if (opts.json) process.stdout.write(`${JSON.stringify(r, null, 2)}\n`);
-  else console.error(`✖ ${message}`);
-  process.exit(code);
-}
-
-function succeed(r) {
-  if (opts.json) {
-    process.stdout.write(`${JSON.stringify(r, null, 2)}\n`);
-  } else {
-    console.log(`\n✓ ${r.message ?? 'publish complete'}`);
-    if (r.url) console.log(`url:      ${r.url}`);
-    if (r.detail) console.log(`detail:   ${r.detail}`);
-  }
-  process.exit(0);
-}
-
-// ------------------------------------------------------------- pipeline
+// ---------------------------------------------------------------- main
 
 async function main() {
-  // 1. build the whitelist-clean package + zip (self-verifying)
-  const buildArgs = ['--skill', opts.skill, '--out', opts.out, '--zip'];
-  const build = run(process.execPath, [BUILD_SCRIPT, ...buildArgs]);
-  if (build.status !== 0) {
-    fail(1, `build-skillhub failed (exit ${build.status}): ${(build.stderr || build.stdout).slice(0, 500)}`);
-  }
-
-  const zipPath = `${opts.out}.zip`;
-  if (!existsSync(zipPath)) fail(1, `build succeeded but zip not found: ${zipPath}`);
-  if (!opts.json) console.log(`package:  ${zipPath}`);
-
-  // 2. resolve CLI + auth check
   const cli = resolveCli();
-  opts.cliBase = cli.base;
-  const whoami = run(cli.cmd, cliBaseArgs('whoami'));
-  if (whoami.status !== 0) {
-    const detail = (whoami.stderr || whoami.stdout || '').slice(0, 200);
-    fail(2, `SkillHub auth failed — run \`skillhub login --token sk_...\` (or set SKILLHUB_TOKEN / --token). ${detail ? `(${detail})` : ''}`);
-  }
-  if (!opts.json) console.log(`auth:     ${whoami.stdout.trim().split('\n')[0] || 'ok'}`);
+  if (!cli) fail(5, '未找到 skillhub CLI,先安装: curl -fsSL https://skillhub.cn/install/install.sh | bash -s -- --cli-only');
 
-  if (opts.dryRun) {
-    succeed({ ok: true, dryRun: true, exitCode: 0, message: `dry-run OK — package built, auth valid, publish skipped (would publish ${opts.namespace}/${opts.skill})` });
-  }
+  const outDir = opts.out ?? join(REPO_ROOT, 'build', 'skillhub', opts.skill);
+  const build = run(process.execPath, [BUILD_SCRIPT, '--skill', opts.skill, '--out', outDir]);
+  if (build.status !== 0) fail(1, `build 失败 (exit ${build.status}): ${(build.stderr || build.stdout).slice(0, 300)}`);
 
-  // 3. publish the zip
-  const pub = run(cli.cmd, cliArgs('publish', zipPath, '--namespace', opts.namespace, '--visibility', opts.visibility));
-  if (pub.status !== 0) {
-    fail(1, `skillhub publish failed (exit ${pub.status}): ${(pub.stderr || pub.stdout).slice(0, 500)}`);
-  }
+  const skillMd = join(outDir, 'SKILL.md');
+  if (!existsSync(skillMd)) fail(1, `build 产物缺少 SKILL.md: ${skillMd}`);
+  const fm = parseFrontmatter(readFileSync(skillMd, 'utf8'));
+  const errs = checkSkillFrontmatter(fm);
+  if (errs.length) fail(1, `SKILL.md frontmatter 不合法:\n  - ${errs.join('\n  - ')}`);
+  opts.changelog = opts.changelog ?? `v${fm.version}`;
 
-  // 4. report
-  const out = (pub.stdout || '').trim();
-  const url = out.match(/https?:\/\/[^\s]+/)?.[0] ?? null;
-  succeed({
-    ok: true, exitCode: 0,
-    namespace: opts.namespace, skill: opts.skill, visibility: opts.visibility,
-    url, detail: out,
-    message: `published ${opts.namespace}/${opts.skill} (${opts.visibility})`,
-  });
+  const whoami = run(cli.cmd, [...cli.base, 'auth', 'whoami']);
+  if (whoami.status !== 0) fail(2, '未登录,先执行: skillhub login --key skh_xxx --host https://api.skillhub.cn');
+
+  const pubArgs = [...cli.base, 'publish', outDir];
+  if (!opts.dryRun) pubArgs.push('--changelog', opts.changelog);
+  if (opts.json) pubArgs.push('--json');
+  if (opts.dryRun) pubArgs.push('--dry-run');
+  const pub = run(cli.cmd, pubArgs);
+  if (pub.status !== 0) fail(1, `发布失败 (exit ${pub.status}): ${(pub.stderr || pub.stdout).slice(0, 300)}`);
+
+  process.stdout.write(`${(pub.stdout || '').trim()}\n`);
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
-if (isMain) {
-  main().catch((e) => { fail(1, `[fatal] ${e?.stack ?? e}`); });
-}
+if (isMain) main().catch((e) => fail(1, `[fatal] ${e?.stack ?? e}`));
