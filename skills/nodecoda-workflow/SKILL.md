@@ -59,7 +59,7 @@ NodeCoda Key 只存在于 MCP 客户端配置中。不要要求、读取、打�
 - `get_workflow_build`
 - `cancel_workflow_build`
 
-> **MCP 不可用时的回退**：若 MCP 工具返回 `401 NO_KEY`（stdio server 未继承 `NODECODA_KEY`）或工具未注册，不要伪造工具结果，也不要把凭据写进配置；直接走「公共部署 · REST 直连回退」，凭据只从环境读取。
+> **MCP 不可用时的回退**：若 MCP 工具未注册或持续返回 `AUTH_REQUIRED` / `INVALID_TOKEN`（说明网关为 www 严格准入且未配置 key），不要伪造工具结果，也不要把凭据写进配置；直接走「公共部署 · REST 直连回退」，凭据只从环境读取。未配置 key 时默认已走 try 免费体验，无需回退。
 ## 工作流程
 
 ```text
@@ -219,6 +219,32 @@ npx -y @nodecoda/skill save-build <build_id> --source builds/<build_id>/<source_
 - [反模式清单（实证）](references/gotchas.md)
 - [迭代循环](references/iteration-loop.md)
 
+## 免费体验（try.nodecoda.com）
+
+未配置 `NODECODA_KEY` 时，MCP 工具自动指向 **try.nodecoda.com** 的免费体验实例：无需注册、无需 key，开箱即 build。
+
+- **体验叙事**：注册前是「免费体验期」——不提配额、不显示剩余次数、不设倒计时、不制造稀缺感；让用户先成功完成一次构建（首交即魔术时刻），把注册留给配额真正用尽时。
+- **身份**：客户端自动生成并持久化设备 ID（`~/.nodecoda/device.json`，0600），构建以设备为单位记账；换机器会重新开始体验。
+- **注册引导话术（仅 `GUEST_QUOTA_EXHAUSTED` 时出现）**：
+  > "免费体验次数用完了。注册一个账号，构建会搬到你的专属服务器上——更稳定、配额更高、历史构建可查。"
+  叙事是**「注册 = 升级到专属服务器」**，不是「不注册就不能用」。
+
+### 错误码 → 用户文案（K-E4）
+
+工具返回 `{"error":"<CODE>","message":"..."}` 时按下表处理：
+
+| 错误码 | 含义 | 处理 |
+|---|---|---|
+| `GUEST_QUOTA_EXHAUSTED` | 免费配额用尽 | 展示上方注册引导话术；可提议 `npx -y @nodecoda/skill login` 一键转正 |
+| `GUEST_IP_RATE_LIMITED` | 网络限流 | 提示"稍等片刻再试"，继续当前任务 |
+| `GUEST_DEVICE_REQUIRED` | 缺设备头（异常） | 自动重试一次；仍失败则提示重装 MCP server |
+| `GUEST_DEVICE_BLOCKED` | 设备被标记 | 温和提示联系支持，不纠缠 |
+| `GUEST_EPOCH_ENDED` | 战役已结束 | 关停文案："免费体验已结束，正式版见 nodecoda.com"，引导用正式 key 或注册 |
+| `GUEST_DISABLED` | 实例未开 guest | 等同关停文案，引导 www |
+| `INSUFFICIENT_CREDITS` / `PENDING_LIMIT` | 余额/并发（www 正式路径） | 按原说明处理：充值或稍后重试 |
+
+**不要**在成功路径里主动提配额、剩余次数或注册（阶段 1 用户面无压力话术）。
+
 ## 公共部署
 
 公共 MCP 接入点（**Workspace** 暴露 `/api/v1/*` REST 网关，内部转给 MCP）：
@@ -226,7 +252,8 @@ npx -y @nodecoda/skill save-build <build_id> --source builds/<build_id>/<source_
 | 项 | 值 |
 |---|---|
 | Workspace web | `https://www.nodecoda.com` |
-| MCP gateway base (build/poll/cancel) | `https://www.nodecoda.com/v1` |
+| MCP gateway base (build/poll/cancel) | `https://www.nodecoda.com/v1`（未配置 key 时自动走 `https://try.nodecoda.com/v1` 免费体验） |
+| 免费体验实例（无 key） | `https://try.nodecoda.com/v1`（`NODECODA_MCP_BASE` 可覆盖） |
 | Workspace admin base (login/keys) | `https://www.nodecoda.com/api/v1` |
 | Workflow Build | `POST {mcp_base}/workflow-builds` |
 | Workflow Poll | `GET {mcp_base}/workflow-builds/{build_id}` |
@@ -260,7 +287,7 @@ startup_timeout_sec = 5
 **仍未走 MCP 直连的场景**：用户侧若希望 Codex 直接 JSON-RPC 2.0 打 `https://www.nodecoda.com/mcp`，需要在 Cloudflare/Caddy 把 `/mcp` 路由到 MCP 后端。当前的 stdio 适配绕开了这层依赖，是"先打通"的稳妥路径。
 
 
-### REST 直连回退（MCP 401 NO_KEY / 工具缺失时）
+### REST 直连回退（www 正式路径 / MCP 工具缺失时）
 
 MCP stdio server 通过 `process.env.NODECODA_KEY` 取 key；若启动 agent 的 shell 已导出 key 但 MCP 仍报 `NO_KEY`，通常是 server 进程未继承环境。此时直接打公网网关（base `https://www.nodecoda.com/v1`），凭据只从环境读取、绝不打印/落盘：
 

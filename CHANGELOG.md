@@ -6,6 +6,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [Unreleased]
+
+### Added - Guest free-campaign MCP wiring（PRD 模块 E · K-E1~E5）
+
+- **K-E3 设备身份持久化**：新增 `scripts/device-id.mjs` —— 首次运行生成 UUID v4，
+  持久化到 `~/.nodecoda/device.json`（0600），跨会话复用；`NODECODA_DEVICE_ID` /
+  `NODECODA_DEVICE_DIR` env 覆盖（CI/容器），只读文件系统回退内存 id。
+- **K-E2 零分支身份头**：`mcp-core.mjs` 每次请求附加 `X-NodeCoda-Device-Id`（sha256 服务端存储）
+  与 `X-NodeCoda-Client`（`nodecoda-skill/<pkg-version>`，运行时读 package.json）；
+  无 `NODECODA_KEY` 时用内置占位 key（`sk-try-placeholder`）—— try 实例按 guest 服务，
+  www 严格 401，客户端不再自行抛 `NO_KEY`。
+- **K-E1 开箱即用**：`mcp-register.mjs` 在未检测到 `NODECODA_KEY` 时为 Codex 写入
+  `env.NODECODA_MCP_BASE=https://try.nodecoda.com/v1`（不落任何密钥），装完即走免费体验；
+  已有 key 的正式路径不设 env（默认 www）。
+- **K-E4 错误码 → 用户文案**：SKILL.md 新增映射表（`GUEST_QUOTA_EXHAUSTED`→注册引导、
+  `GUEST_EPOCH_ENDED`/`GUEST_DISABLED`→关停引流、`GUEST_DEVICE_REQUIRED`→自动重试等）。
+- **K-E5 战役叙事**：SKILL.md 免费体验章节——阶段 1 用户面无配额提示/倒计时/剩余次数，
+  不制造稀缺性；注册话术仅在配额用尽时出现，叙事为「注册 = 专属服务器权益」。
+- 新增 `scripts/test-device-id.mjs`（7 断言）并接入 `npm test` / `test:all`。
+
 
 ### Fixed - Project Mode set-state 旗标强制 + 重建链指引；grammar 悬空非终结符守卫；live-mcp CLI 接线（v0.2.20）
 

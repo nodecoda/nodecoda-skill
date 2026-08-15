@@ -57,8 +57,8 @@ export function codexTomlHasServer(tomlText, name = MCP_SERVER.name) {
   return re.test(tomlText);
 }
 
-export function codexTomlBlock(server = MCP_SERVER) {
-  return [
+export function codexTomlBlock(server = MCP_SERVER, { mcpBase } = {}) {
+  const lines = [
     '',
     `# NodeCoda MCP — auto-registered by 'nodecoda-skill add' (v0.2.10+).`,
     `# Zero-install stdio server: fetched on demand via npx.`,
@@ -69,19 +69,25 @@ export function codexTomlBlock(server = MCP_SERVER) {
     `args = [${server.args.map((a) => `"${tomlEscape(a)}"`).join(', ')}]`,
     `enabled = true`,
     `startup_timeout_sec = 5`,
-    '',
-  ].join('\n');
+  ];
+  if (mcpBase) {
+    lines.push(`env = { NODECODA_MCP_BASE = "${tomlEscape(mcpBase)}" }`);
+    lines.push(`# ^ 未配置 NODECODA_KEY 时，自动走 try.nodecoda.com 免费体验（无需注册）；`);
+    lines.push(`#   配置 NODECODA_KEY 后，移除该行或用 NODECODA_MCP_BASE 指回 www 正式实例。`);
+  }
+  lines.push('');
+  return lines.join('\n');
 }
 
 // Idempotently register the NodeCoda MCP server in a Codex config.toml.
 // Returns { status: 'added' | 'exists', configPath }.
-export async function addCodexMcp(configPath, server = MCP_SERVER) {
+export async function addCodexMcp(configPath, server = MCP_SERVER, { mcpBase } = {}) {
   const prev = existsSync(configPath) ? await readFile(configPath, 'utf8') : '';
   if (codexTomlHasServer(prev, server.name)) {
     return { status: 'exists', configPath };
   }
   await mkdir(dirname(configPath), { recursive: true });
-  await writeFile(configPath, `${prev}${codexTomlBlock(server)}`, 'utf8');
+  await writeFile(configPath, `${prev}${codexTomlBlock(server, { mcpBase })}`, 'utf8');
   return { status: 'added', configPath };
 }
 
@@ -223,7 +229,11 @@ export async function registerMcp({
     const configPath = scope === 'home'
       ? join(homeDir, '.codex', 'config.toml')
       : join(projectDir, '.codex', 'config.toml');
-    const r = await addCodexMcp(configPath);
+    // K-E1: with no NODECODA_KEY configured, point the fresh install at the
+    // try free-experience instance so it works out of the box (placeholder
+    // key is synthesized by mcp-core at request time — nothing secret here).
+    const mcpBase = env.NODECODA_KEY ? undefined : 'https://try.nodecoda.com/v1';
+    const r = await addCodexMcp(configPath, MCP_SERVER, { mcpBase });
     results.push({ target: `Codex (${configPath})`, r });
   } else if (platform === 'gemini-cli') {
     const settingsPath = scope === 'home'

@@ -19,7 +19,29 @@
 export function resolveUpstreamBase(env = process.env) {
   return (env.NODECODA_MCP_BASE || env.NODECODA_API_BASE || 'https://www.nodecoda.com/v1').replace(/\/$/, '');
 }
+import { loadDeviceId } from './device-id.mjs';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 const API_BASE = resolveUpstreamBase();
+
+// K-E2: guest campaign placeholder key. When NODECODA_KEY is absent the skill
+// still sends a well-formed bearer token; try.nodecoda.com's loose admission
+// serves it as a guest build (S-B1), while www strictly rejects it with 401.
+const GUEST_PLACEHOLDER_KEY = 'sk-try-placeholder';
+// X-NodeCoda-Client attribution header (S-B3): derived from package.json at
+// runtime so it tracks the installed skill version without manual upkeep.
+let _clientVersion = null;
+function clientVersion() {
+  if (_clientVersion) return _clientVersion;
+  try {
+    const pkg = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'));
+    _clientVersion = pkg.version || '0.0.0';
+  } catch {
+    _clientVersion = '0.0.0';
+  }
+  return _clientVersion;
+}
 
 export const PROTOCOL_VERSION = '2025-03-26';
 export const SERVER_INFO = { name: 'nodecoda-workflow-mcp', version: '0.2.0' };
@@ -81,14 +103,19 @@ export class HttpError extends Error {
 // ---- HTTP layer ---------------------------------------------------------
 
 async function apiFetch(path, { method = 'GET', body, headers = {}, token } = {}) {
-  const key = token ?? process.env.NODECODA_KEY;
-  if (!key) {
-    throw new HttpError(401, { code: 'NO_KEY', message: 'NODECODA_KEY env var (or bearer token) is not set' });
-  }
+  // K-E2: zero-branch key resolution — explicit token, else NODECODA_KEY,
+  // else the guest placeholder. Never 401s client-side for a missing key:
+  // try serves it as guest, www rejects with the server's own 401.
+  const key = token ?? process.env.NODECODA_KEY ?? GUEST_PLACEHOLDER_KEY;
   const url = `${API_BASE}${path}`;
   const h = {
     'Authorization': `Bearer ${key}`,
     'Accept': 'application/json',
+    // K-E2/K-E3: guest identity + attribution on every request. www ignores
+    // these headers for key-authenticated traffic; try anchors guests on the
+    // device id (server stores only sha256).
+    'X-NodeCoda-Device-Id': loadDeviceId(),
+    'X-NodeCoda-Client': `nodecoda-skill/${clientVersion()}`,
     ...headers,
   };
   if (body !== undefined) h['Content-Type'] = 'application/json';

@@ -72,6 +72,16 @@ assert(r.status === 'exists', 'addCodexMcp: second call -> exists');
 const text1b = await readFile(cfg1, 'utf8');
 assert(text1b === text1, 'addCodexMcp: idempotent (no duplicate table)');
 
+// K-E1: try free-experience base is written when no key is configured.
+const blockTry = codexTomlBlock(MCP_SERVER, { mcpBase: 'https://try.nodecoda.com/v1' });
+assert(blockTry.includes('NODECODA_MCP_BASE = "https://try.nodecoda.com/v1"'), 'codexTomlBlock: try base env written for keyless install');
+assert(!blockTry.includes('NODECODA_KEY ='), 'codexTomlBlock: no secret key assignment is ever written');
+
+const cfgTry = join(T.home, '.codex', 'config.try.toml');
+await addCodexMcp(cfgTry, MCP_SERVER, { mcpBase: 'https://try.nodecoda.com/v1' });
+const textTry = await readFile(cfgTry, 'utf8');
+assert(textTry.includes('try.nodecoda.com'), 'addCodexMcp: try base persisted for keyless install');
+
 const cfg2 = join(T.proj, '.codex', 'config.toml');
 await mkdir(dirname(cfg2), { recursive: true });
 await writeFile(cfg2, '[mcp_servers.other]\ncommand = "x"\n');
