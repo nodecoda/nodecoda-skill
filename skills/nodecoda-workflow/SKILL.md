@@ -129,6 +129,7 @@ function main(string query) -> string {
 ### 4. 有界轮询和取消
 
 - `QUEUED`、`BUILDING`、`CANCELLING`：按 `poll_after_ms` 轮询 `get_workflow_build`，缺失时使用 500 ms。
+  （guest 日限 ≥80% 时服务端会 pacing 到 2000 ms，照用即可。）
 - 整体轮询最多 180 seconds。
 - 超时后只调用一次 `cancel_workflow_build`，再观察 35 additional seconds。
 - `SUCCEEDED`、`FAILED`、`CANCELLED` 是终止状态。
@@ -225,9 +226,21 @@ npx -y @nodecoda/skill save-build <build_id> --source builds/<build_id>/<source_
 
 - **体验叙事**：注册前是「免费体验期」——不提配额、不显示剩余次数、不设倒计时、不制造稀缺感；让用户先成功完成一次构建（首交即魔术时刻），把注册留给配额真正用尽时。
 - **身份**：客户端自动生成并持久化设备 ID（`~/.nodecoda/device.json`，0600），构建以设备为单位记账；换机器会重新开始体验。
-- **注册引导话术（仅 `GUEST_QUOTA_EXHAUSTED` 时出现）**：
+- **注册引导话术（仅 `exhausted` 且 `register_hint: true` 时出现）**：
   > "免费体验次数用完了。注册一个账号，构建会搬到你的专属服务器上——更稳定、配额更高、历史构建可查。"
   叙事是**「注册 = 升级到专属服务器」**，不是「不注册就不能用」。
+
+### 放行 / 节流 / 软停（K-E6：结构化状态）
+
+try 的 guest admission 返回**结构化 JSON 状态**（HTTP 200，包在 `data` 里；只有全局预算超限才回 429 error），`build_dify_workflow` 的结果按 `status` 分派：
+
+| status | 含义 | 客户端处理 |
+|---|---|---|
+| `queued` | 放行，已入队 | 正常轮询；`quota.success_used` 可在**低干扰**下展示「已使用 N 次」——**不**渲染剩余次数、倒计时或稀缺话术 |
+| `throttled` | 瞬态限流（`reason=device_rate` / `ip_quota`） | MCP server 已自动按 `retry_after_ms` sleep 后退避重试**原提交**（同幂等 key），有界 ≤3 次；若最终仍返回 `throttled`（带 `_client_retries`），温和提示「服务器繁忙，稍等片刻再试」并附 quota 摘要，不硬报错、**不改 Source** |
+| `exhausted` | 设备日限软停（**非 error**） | 展示 server 下发的 `message`（温和文案）与「已使用 N 次」（`quota.success_used`）；`register_hint: true` 时附加注册引导话术；无倒计时 |
+
+**成功路径**：`quota` 块随放行响应返回，只用于可选的「已使用 N 次」；不主动提剩余、不催注册（阶段 1 用户面无压力话术）。
 
 ### 错误码 → 用户文案（K-E4）
 
@@ -235,8 +248,8 @@ npx -y @nodecoda/skill save-build <build_id> --source builds/<build_id>/<source_
 
 | 错误码 | 含义 | 处理 |
 |---|---|---|
-| `GUEST_QUOTA_EXHAUSTED` | 免费配额用尽 | 展示上方注册引导话术；可提议 `npx -y @nodecoda/skill login` 一键转正 |
-| `GUEST_IP_RATE_LIMITED` | 网络限流 | 提示"稍等片刻再试"，继续当前任务 |
+| `GUEST_QUOTA_EXHAUSTED` | 免费配额用尽 | 两种形态：① 结构化 `status:"exhausted"`（软停，非 error，见上表）→ 展示 server `message` + 「已使用 N 次」，`register_hint: true` 才加注册引导；② HTTP 429 硬拒（全局在途满/预算超限）→ 同样文案。可提议 `npx -y @nodecoda/skill login` 一键转正 |
+| `GUEST_IP_RATE_LIMITED` | 网络限流 | 现为结构化 `status:"throttled" reason="ip_quota"`——MCP server 已自动退避重试 ≤3 次；仍失败则提示"稍等片刻再试"，继续当前任务 |
 | `GUEST_DEVICE_REQUIRED` | 缺设备头（异常） | 自动重试一次；仍失败则提示重装 MCP server |
 | `GUEST_DEVICE_BLOCKED` | 设备被标记 | 温和提示联系支持，不纠缠 |
 | `GUEST_EPOCH_ENDED` | 战役已结束 | 关停文案："免费体验已结束，正式版见 nodecoda.com"，引导用正式 key 或注册 |

@@ -89,6 +89,7 @@ enabled = true
 | 每个响应包 `{ code, message, data }` envelope | `references/mcp-contract.md` "Live gateway note" | 2026-08-12 |
 | `/mcp` 路由已生效（不再被 SPA catch-all 接管） | `.codex/config.example.toml`、`docs/installation.md`、本页"状态与故障提示" | 2026-08-12 |
 | `Idempotency-Key` header 必须与 body `idempotency_key` 双份一致（单份 400） | `references/mcp-contract.md` "Transport requirement"、本页 REST curl | 2026-08-14 |
+| try guest admission 返回结构化 `throttled` / `exhausted` + `quota` 块（`success_used` / `register_hint` / `resets_in_seconds`）；软停文案"明天自动重置"+「注册可享专属服务器」 | `references/mcp-contract.md` "Guest admission statuses"、`nodecoda-guest-rate-limit-model.md` §6 | 2026-08-15 |
 
 ## 客户端配置
 
@@ -144,6 +145,15 @@ enabled = true
 3. 按 server 给的 `poll_after_ms` 轮询，最长 180 秒。
 4. 超时后发起一次 cancel，再观察 35 秒内是否到 `CANCELLED`。
 5. 仅当返回的 target profile 与请求一致且 artifact 存在时算成功。
+
+### Guest 节流 / 软停（try 实例，无 key）
+
+try 的 guest admission 是**结构化 JSON 状态**（`references/mcp-contract.md` "Guest admission statuses"）：
+
+- `status: "throttled"`（瞬态限流，`reason=device_rate` / `ip_quota`）：按 `retry_after_ms` sleep 后**重放同一提交**（同幂等 key），最多 3 次；MCP server（`mcp-core.mjs`）已自动完成，最终仍 throttled 时结果带 `_client_retries` 注解。
+- `status: "exhausted"`（设备日限软停，非 error）：**不重试**；展示服务端 `message` 与已用次数 `quota.success_used`，`register_hint: true` 时才附加注册引导。无倒计时、无稀缺话术。
+- 全局预算超限才回 HTTP 429 `GUEST_QUOTA_EXHAUSTED`（硬拒）。
+- 轮询尊重放行响应里的 `poll_after_ms`（日限 ≥80% 时服务端 pacing 到 2000 ms）。
 
 不要把敏感 Source 发到不可信端点。Build ID 不是凭据，但请放进有界 Build 记录，不要公开发布。
 

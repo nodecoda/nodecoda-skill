@@ -36,6 +36,12 @@ const SKILL_EXAMPLES = join(REPO_ROOT, 'skills/nodecoda-workflow/examples');
 const API_BASE = (process.env.NODECODA_API_BASE || 'https://www.nodecoda.com/api/v1').replace(/\/$/, '');
 const MCP_BASE = (process.env.NODECODA_MCP_BASE || process.env.NODECODA_API_BASE || 'https://www.nodecoda.com/v1').replace(/\/$/, '');
 const POLL_INTERVAL_MS = 2000;
+// Guest progressive throttle retry (mirrors mcp-core.mjs submitWithThrottleRetry):
+// the try gateway answers 200 with { status: "throttled", retry_after_ms, quota }
+// when the device/IP is past its rate tier. Sleep and replay the SAME submission
+// (a throttled admission never created a build, so the idempotency key is valid).
+const MAX_THROTTLE_RETRIES = 3;
+const DEFAULT_RETRY_AFTER_MS = 5000;
 const POLL_TIMEOUT_MS = Number(process.env.NODECODA_POLL_TIMEOUT_MS ?? 180_000);
 
 const useColor = process.stdout.isTTY && !process.env.NO_COLOR;
@@ -134,12 +140,25 @@ async function ensureKey(jwtOrKey) {
 async function submitBuild(key, source, filename) {
   const idempotency_key = `live-mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   log('build', `POST /workflow-builds  file=${filename}  target=${TARGET}  idem=${idempotency_key.slice(0, 24)}…`);
-  const r = await mcpReq('/workflow-builds', {
-    method: 'POST',
-    body: { source, source_filename: filename, language_identity: 'nodecoda/1', target_profile: TARGET, idempotency_key },
-    headers: { 'Authorization': `Bearer ${key}`, 'Idempotency-Key': idempotency_key },
-  });
-  const body = unwrap(r.body);
+  const payload = { source, source_filename: filename, language_identity: 'nodecoda/1', target_profile: TARGET, idempotency_key };
+  const reqHeaders = { 'Authorization': `Bearer ${key}`, 'Idempotency-Key': idempotency_key };
+  let r = null;
+  let body = null;
+  // Guest progressive throttling: retry the SAME submission on retry_after_ms,
+  // bounded (≤ MAX_THROTTLE_RETRIES). Any other status exits the loop.
+  for (let attempt = 0; ; attempt++) {
+    r = await mcpReq('/workflow-builds', { method: 'POST', body: payload, headers: reqHeaders });
+    body = unwrap(r.body);
+    if (r.ok && body?.status === 'throttled' && attempt < MAX_THROTTLE_RETRIES) {
+      const waitMs = Number.isFinite(Number(body.retry_after_ms)) && Number(body.retry_after_ms) > 0
+        ? Number(body.retry_after_ms)
+        : DEFAULT_RETRY_AFTER_MS;
+      warn('build', `guest throttled (${body.reason ?? 'unknown'}) — retry in ${Math.round(waitMs / 1000)}s (${attempt + 1}/${MAX_THROTTLE_RETRIES})`);
+      await new Promise((res) => setTimeout(res, waitMs));
+      continue;
+    }
+    break;
+  }
   if (!r.ok) {
     // Special-case the L4 launch blocker so the user knows what to do next
     if (body?.reason === 'WORKFLOW_BUILD_SERVICE_UNAVAILABLE') {
@@ -157,11 +176,26 @@ async function submitBuild(key, source, filename) {
     }
     die('build', `submit failed (HTTP ${r.status})`, r.body);
   }
+  if (body?.status === 'throttled') {
+    die('build', 'guest admission still throttled after bounded retries — server is busy, try again later', {
+      status: body.status, reason: body.reason, retry_after_ms: body.retry_after_ms, quota: body.quota,
+    });
+  }
+  if (body?.status === 'exhausted') {
+    // Device daily quota soft stop (non-error): surface the server-authored
+    // gentle copy + used count; no countdown, no scarcity framing.
+    die('build', body.message ?? '免费体验额度已用完，请改天再来。', {
+      code: body.code, quota: body.quota, register_hint: body.register_hint,
+    });
+  }
   ok('build', `admitted  build_id=${body?.build_id}  status=${body?.status}  poll_after_ms=${body?.poll_after_ms}`);
   return body;
 }
 
-async function pollBuild(key, buildId) {
+async function pollBuild(key, buildId, pollAfterMs) {
+  const interval = Number.isFinite(Number(pollAfterMs)) && Number(pollAfterMs) > 0
+    ? Number(pollAfterMs)
+    : POLL_INTERVAL_MS;
   const start = Date.now();
   let last = null;
   while (Date.now() - start < POLL_TIMEOUT_MS) {
@@ -171,7 +205,7 @@ async function pollBuild(key, buildId) {
     const status = last?.status ?? '?';
     log('poll', `t=${Math.round((Date.now() - start) / 1000)}s  status=${status}  build_id=${buildId}`);
     if (['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(status)) return last;
-    await new Promise((res) => setTimeout(res, POLL_INTERVAL_MS));
+    await new Promise((res) => setTimeout(res, interval));
   }
   warn('poll', `timeout after ${POLL_TIMEOUT_MS}ms — last status=${last?.status}`);
   return last;
@@ -232,7 +266,7 @@ async function main() {
   }
 
   const admitted = await submitBuild(key, source, filename);
-  const final = await pollBuild(key, admitted.build_id);
+  const final = await pollBuild(key, admitted.build_id, admitted?.poll_after_ms);
   await saveArtifact(final, key);
 
   if (final?.status === 'SUCCEEDED') {

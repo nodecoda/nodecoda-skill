@@ -131,6 +131,38 @@ async function apiFetch(path, { method = 'GET', body, headers = {}, token } = {}
   return parsed;
 }
 
+
+// ---- guest throttle retry -------------------------------------------------
+// try.nodecoda.com's guest admission is progressive: when the device/IP has
+// crossed its rate tier the gateway answers HTTP 200 with a structured
+// { status: "throttled", reason, retry_after_ms, quota } payload instead of a
+// hard error (nodecoda-guest-rate-limit-model.md §6). A throttled admission
+// never created a build, so the client sleeps retry_after_ms and replays the
+// SAME submission (same idempotency key). Bounded retries; if the throttle
+// persists the final payload is passed through with a client-side
+// `_client_retries` annotation so the agent can tell first-throttle from
+// retries-exhausted. `exhausted` (device daily soft stop) is a product state,
+// NOT a failure — it is never retried and passes through untouched.
+export const MAX_THROTTLE_RETRIES = 3;
+export const DEFAULT_RETRY_AFTER_MS = 5000;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export async function submitWithThrottleRetry(submit, { maxRetries = MAX_THROTTLE_RETRIES } = {}) {
+  let retries = 0;
+  for (;;) {
+    const data = await submit();
+    if (data?.status !== 'throttled') return data;
+    if (retries >= maxRetries) {
+      return { ...data, _client_retries: retries };
+    }
+    const waitMs = Number.isFinite(Number(data.retry_after_ms)) && Number(data.retry_after_ms) > 0
+      ? Number(data.retry_after_ms)
+      : DEFAULT_RETRY_AFTER_MS;
+    await sleep(waitMs);
+    retries += 1;
+  }
+}
+
 // ---- tool dispatch ------------------------------------------------------
 
 // Gateway envelope normalization: { code, message, data: {...} } -> data.
@@ -147,13 +179,15 @@ const TOOL_HANDLERS = {
   // Per references/mcp-contract.md: same idempotency_key in the body AND the
   // Idempotency-Key header. We forward both for safety.
   build_dify_workflow: async (args, token) => {
-    const data = await apiFetch('/workflow-builds', {
-      method: 'POST',
-      body: args,
-      headers: { 'Idempotency-Key': args.idempotency_key },
-      token,
+    return submitWithThrottleRetry(async () => {
+      const data = await apiFetch('/workflow-builds', {
+        method: 'POST',
+        body: args,
+        headers: { 'Idempotency-Key': args.idempotency_key },
+        token,
+      });
+      return unwrap(data);
     });
-    return unwrap(data);
   },
   get_workflow_build: async (args, token) => {
     const data = await apiFetch(`/workflow-builds/${encodeURIComponent(args.build_id)}`, { method: 'GET', token });

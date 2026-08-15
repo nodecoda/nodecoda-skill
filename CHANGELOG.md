@@ -5,8 +5,7 @@ All notable changes to this distribution repository will be documented in this f
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-## [Unreleased]
+## [0.2.21] - 2026-08-15
 
 ### Added - Guest free-campaign MCP wiring（PRD 模块 E · K-E1~E5）
 
@@ -26,6 +25,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   不制造稀缺性；注册话术仅在配额用尽时出现，叙事为「注册 = 专属服务器权益」。
 - 新增 `scripts/test-device-id.mjs`（7 断言）并接入 `npm test` / `test:all`。
 
+
+### Added - Guest 渐进限流客户端适配（nodecoda-guest-rate-limit-model.md §6 · K-E6）
+
+- **`throttled` 自动退避重试**：`scripts/mcp-core.mjs` 新增 `submitWithThrottleRetry`——
+  try 网关返回结构化 `{status:"throttled", reason, retry_after_ms, quota}` 时，
+  MCP server 按 `retry_after_ms` sleep 后**重放同一提交**（同幂等 key，节流未建 build，
+  幂等 key 依然有效），有界 ≤3 次；仍失败时结果带客户端注解 `_client_retries`
+  （网关永不发送该字段），SKILL.md 指示 agent 温和提示"服务器繁忙"而非硬报错/改 Source。
+- **`exhausted` 软停透传**：设备日限用尽返回 `{status:"exhausted", code:GUEST_QUOTA_EXHAUSTED,
+  message, quota, register_hint}`——**非 error**，不重试，原样透传给 agent 渲染服务端
+  温和文案 + 「已使用 N 次」（`quota.success_used`）；`register_hint:true` 才附加注册引导，
+  无倒计时、无稀缺话术（阶段 1 无压力面）。
+- **轮询 pacing**：放行响应的 `poll_after_ms` 原样透传（日限 ≥80% 时服务端 pacing 到 2000 ms）；
+  `scripts/live-mcp.mjs` 的 `pollBuild` 尊重 admission 的 `poll_after_ms`，`submitBuild` 同步支持
+  throttled 退避重试与 exhausted 温和退出。
+- **文档契约**：SKILL.md 新增 K-E6 状态分派表（queued/throttled/exhausted），K-E4 错误码表同步
+  双形态（结构化软停 + 429 硬拒）；`references/mcp-contract.md` 新增 "Guest admission statuses"，
+  `references/public-service.md` 新增 guest 节流/软停小节与观测表行（2026-08-15）。
+- **测试**：`scripts/test-http-server.mjs` 新增 4 项——throttle 后成功（3 次提交同 key）、
+  持续 throttled 有界重试（4 次提交 + `_client_retries`）、exhausted 透传不重试、
+  queued quota/poll_after_ms 透传。HTTP server 测试 21/21 绿。
 
 ### Fixed - Project Mode set-state 旗标强制 + 重建链指引；grammar 悬空非终结符守卫；live-mcp CLI 接线（v0.2.20）
 

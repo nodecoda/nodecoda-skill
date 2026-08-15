@@ -46,16 +46,57 @@ console.log('http MCP server tests');
 // ---- local upstream REST stub ------------------------------------------
 
 const seenAuth = [];
+// seenBuildPosts: every idempotency_key the stub has admitted (throttle retry
+// replays the same key, so the count proves bounded-retry behaviour).
+const seenBuildPosts = [];
 // Mimic the live gateway: responses are wrapped in { code, message, data },
 // and SUCCEEDED polls carry artifact *metadata* only — the raw content lives
 // behind GET /workflow-builds/{id}/artifact.
 const wrap = (obj) => ({ code: 0, message: 'success', data: obj });
+const GUEST_QUOTA = { mode: 'on', success: 50, success_used: 3, diagnostic: 29.7, resets_in_seconds: 86399, register_hint: false };
 const stub = createServer((req, res) => {
   seenAuth.push(req.headers.authorization ?? null);
   if (req.method === 'POST' && req.url?.startsWith('/workflow-builds')) {
-    res.setHeader('Content-Type', 'application/json');
-    res.writeHead(202);
-    res.end(JSON.stringify(wrap({ build_id: 'build_stub', status: 'QUEUED', poll_after_ms: 10 })));
+    // Guest structured admission states, keyed by idempotency_key prefix:
+    //   throttle-then-ok-*  -> throttled x2, then queued (auto-retry proves replay)
+    //   throttle-always-*   -> throttled forever (bounded retries exhausted)
+    //   exhausted-*         -> device daily soft stop (never retried)
+    //   anything else       -> queued with quota block (pacing + low-key used count)
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      let idem = null;
+      try { idem = JSON.parse(body)?.idempotency_key ?? null; } catch { idem = null; }
+      seenBuildPosts.push(idem ?? '<no-key>');
+      const send = (obj, status = 202) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.writeHead(status);
+        res.end(JSON.stringify(wrap(obj)));
+      };
+      if (typeof idem === 'string' && idem.startsWith('throttle-then-ok-')) {
+        const n = seenBuildPosts.filter((k) => k === idem).length;
+        if (n <= 2) {
+          send({ status: 'throttled', reason: 'device_rate', retry_after_ms: 30, quota: GUEST_QUOTA });
+        } else {
+          send({ build_id: `build_${idem}`, status: 'QUEUED', poll_after_ms: 10, quota: GUEST_QUOTA });
+        }
+        return;
+      }
+      if (typeof idem === 'string' && idem.startsWith('throttle-always-')) {
+        send({ status: 'throttled', reason: 'ip_quota', retry_after_ms: 20, quota: GUEST_QUOTA });
+        return;
+      }
+      if (typeof idem === 'string' && idem.startsWith('exhausted-')) {
+        send({
+          status: 'exhausted',
+          code: 'GUEST_QUOTA_EXHAUSTED',
+          message: '今天的免费构建额度已用完，明天自动重置。免费服务器资源有限，注册可享专属服务器。',
+          quota: { ...GUEST_QUOTA, success_used: 50, register_hint: true },
+        });
+        return;
+      }
+      send({ build_id: 'build_stub', status: 'QUEUED', poll_after_ms: 10, quota: GUEST_QUOTA });
+    });
     return;
   }
   if (req.method === 'GET' && req.url === '/workflow-builds/build_stub') {
@@ -283,6 +324,66 @@ console.log('http MCP server tests');
     else bad('cli mcp --http serves MCP', `status=${r.status} body=${r.body.slice(0, 200)}`);
   }
   cli.kill();
+}
+
+// 14. guest throttled admission -> auto backoff retry (same key) -> queued
+{
+  const r = await httpReq('POST', '/mcp', {
+    headers: AUTH,
+    body: { jsonrpc: '2.0', id: 14, method: 'tools/call', params: { name: 'build_dify_workflow', arguments: { source: 'x', source_filename: 'x.ncoda', language_identity: 'nodecoda/1', target_profile: 'dify-1.16-graphon-0.6', idempotency_key: 'throttle-then-ok-1' } } },
+  });
+  const p = JSON.parse(r.body);
+  const text = p?.result?.content?.[0]?.text ?? '';
+  const posts = seenBuildPosts.filter((k) => k === 'throttle-then-ok-1').length;
+  if (r.status === 200 && text.includes('QUEUED') && posts === 3) ok('throttled admission auto-retries (3 submits, same key) then succeeds');
+  else bad('throttle retry then ok', `status=${r.status} posts=${posts} text=${text.slice(0, 200)}`);
+}
+
+// 15. persistent throttled -> bounded retries exhausted -> _client_retries annotation
+{
+  const r = await httpReq('POST', '/mcp', {
+    headers: AUTH,
+    body: { jsonrpc: '2.0', id: 15, method: 'tools/call', params: { name: 'build_dify_workflow', arguments: { source: 'x', source_filename: 'x.ncoda', language_identity: 'nodecoda/1', target_profile: 'dify-1.16-graphon-0.6', idempotency_key: 'throttle-always-1' } } },
+  });
+  const p = JSON.parse(r.body);
+  const text = p?.result?.content?.[0]?.text ?? '';
+  const posts = seenBuildPosts.filter((k) => k === 'throttle-always-1').length;
+  if (r.status === 200 && text.includes('throttled') && text.includes('"reason": "ip_quota"') && text.includes('_client_retries') && posts === 4) {
+    ok('persistent throttled bounded at 3 retries (4 submits) with _client_retries');
+  } else {
+    bad('throttle bounded retries', `status=${r.status} posts=${posts} text=${text.slice(0, 220)}`);
+  }
+}
+
+// 16. exhausted soft stop -> pass through untouched, never retried
+{
+  const r = await httpReq('POST', '/mcp', {
+    headers: AUTH,
+    body: { jsonrpc: '2.0', id: 16, method: 'tools/call', params: { name: 'build_dify_workflow', arguments: { source: 'x', source_filename: 'x.ncoda', language_identity: 'nodecoda/1', target_profile: 'dify-1.16-graphon-0.6', idempotency_key: 'exhausted-1' } } },
+  });
+  const p = JSON.parse(r.body);
+  const text = p?.result?.content?.[0]?.text ?? '';
+  const posts = seenBuildPosts.filter((k) => k === 'exhausted-1').length;
+  if (r.status === 200 && text.includes('GUEST_QUOTA_EXHAUSTED') && text.includes('明天自动重置') && text.includes('register_hint') && posts === 1) {
+    ok('exhausted soft stop passes through with message + quota, no retry');
+  } else {
+    bad('exhausted pass-through', `status=${r.status} posts=${posts} text=${text.slice(0, 220)}`);
+  }
+}
+
+// 17. queued admission carries quota block (used-count) + poll_after_ms pacing
+{
+  const r = await httpReq('POST', '/mcp', {
+    headers: AUTH,
+    body: { jsonrpc: '2.0', id: 17, method: 'tools/call', params: { name: 'build_dify_workflow', arguments: { source: 'x', source_filename: 'x.ncoda', language_identity: 'nodecoda/1', target_profile: 'dify-1.16-graphon-0.6', idempotency_key: 'quota-ok-1' } } },
+  });
+  const p = JSON.parse(r.body);
+  const text = p?.result?.content?.[0]?.text ?? '';
+  if (r.status === 200 && text.includes('"status": "QUEUED"') && text.includes('success_used') && text.includes('poll_after_ms') && text.includes('register_hint')) {
+    ok('queued admission passes quota block + poll_after_ms through');
+  } else {
+    bad('queued quota passthrough', `status=${r.status} text=${text.slice(0, 220)}`);
+  }
 }
 
 // ---- cleanup ------------------------------------------------------------

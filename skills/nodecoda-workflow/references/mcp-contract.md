@@ -26,6 +26,20 @@ Call `build_dify_workflow` with all fields present:
 
 A successful admission returns `QUEUED`, a `build_id`, the selected identity fields, and `poll_after_ms`. An unavailable admission returns `availability=UNAVAILABLE`, a `failure_kind`, and sometimes `retry_after_seconds`; it does not return a usable Build identity.
 
+### Guest admission statuses (try.nodecoda.com, no key)
+
+On the free-try instance the admission answer is a **structured JSON status**
+(HTTP 200, inside `data`) — not a hard error, unless the global budget is
+exhausted (then HTTP 429 `GUEST_QUOTA_EXHAUSTED`):
+
+| status | fields | meaning / handling |
+|---|---|---|
+| `queued` | `build_id`, `poll_after_ms`, `quota { mode, success, success_used, diagnostic, resets_in_seconds, register_hint }` | admitted; poll per `poll_after_ms` (server paces it to 2000 ms when ≥80% of the daily cap is used). `quota.success_used` is the low-key "used N times" counter; never render remaining/countdown/scarcity copy. |
+| `throttled` | `reason` (`device_rate` / `ip_quota`), `retry_after_ms`, `quota` | transient rate tier; no `build_id`. Client sleeps `retry_after_ms` and replays the **same** submission (same idempotency key — a throttled admission created no build), bounded ≤3. The MCP servers in this repo do this automatically and annotate the final still-throttled payload with `_client_retries` (client-side field, never sent by the gateway). |
+| `exhausted` | `code=GUEST_QUOTA_EXHAUSTED`, `message`, `quota`, `register_hint` | device daily quota soft stop (**NOT an error**, do not retry). Render `message` (server-authored gentle copy) + used count; append registration copy only when `register_hint: true`. |
+
+`exhausted` is passed through untouched — it is a product state, not a failure.
+
 > Live gateway note (verified 2026-08-12): the public gateway wraps every
 > response as `{ "code": 0, "message": "...", "data": { ... } }`. The MCP
 > servers in this repo (`mcp-stdio-server.mjs`, `mcp-http-server.mjs`) unwrap
