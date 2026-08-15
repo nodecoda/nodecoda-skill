@@ -104,3 +104,14 @@ jobs:
         with:
           generate_release_notes: true
           files: "*.tgz"
+
+  ecosystem-sync:
+    name: Ecosystem sync readiness (skills.sh / SkillsMP / SkillsCat)
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate ecosystem metadata (SKILL.md frontmatter / manifest parity / skills.sh.json)
+        run: node scripts/publish-ecosystems.mjs --check
+      - name: Print ecosystem sync checklist
+        run: node scripts/publish-ecosystems.mjs

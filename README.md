@@ -9,6 +9,7 @@
 [![NodeCoda](https://img.shields.io/badge/NodeCoda-1.0+-00ADD8)](https://www.nodecoda.com)
 [![target](https://img.shields.io/badge/target-dify--1.16--graphon--0.6-6f42c1)](https://www.nodecoda.com)
 [![agents](https://img.shields.io/badge/works%20with-Claude%20Code%20%7C%20Codex%20%7C%20Gemini%20%7C%20Cursor-2f9e44)]()
+[![skills.sh](https://skills.sh/b/nodecoda/nodecoda-skill)](https://skills.sh/nodecoda/nodecoda-skill)
 
 **Workflow engineering should feel like coding — not like fighting a drag-and-drop canvas.**
 
@@ -188,7 +189,7 @@ Per-agent paths and the Cursor `.mdc` details: **[docs/installation.md](https://
 
 | | |
 |---|---|
-| Skill version | `0.2.7` (versioned independently of NodeCoda core) |
+| Skill version | `0.2.35` (versioned independently of NodeCoda core) |
 | NodeCoda core | `>= 1.0.0` (`min_nodecoda`) |
 | Target profile | `dify-1.16-graphon-0.6` |
 | Agents | Claude Code · Codex CLI · Gemini CLI · Cursor (anything following the Claude Code skill convention) |
@@ -227,6 +228,21 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 | [nodecoda/nodecoda-skill](https://github.com/nodecoda/nodecoda-skill) (this) | Agent skills + MCP distribution — the public entry point |
 | [nodecoda/nodecoda](https://github.com/nodecoda/nodecoda) | NodeCoda core: Workspace, MCP, language toolchain, frontend (private) |
 | [www.nodecoda.com](https://www.nodecoda.com) | Public cloud: login, API keys, MCP gateway, web workspace |
+
+### Skill marketplaces
+
+The skill is distributed as `@nodecoda/skill` (npm) and registered in the
+main agent-skill aggregators — see
+[docs/ecosystem-publishing.md](docs/ecosystem-publishing.md) for the full
+sync guide and per-platform status.
+
+| Platform | Install / status |
+|---|---|
+| [skills.sh](https://skills.sh) (Vercel) | `npx skills add nodecoda/nodecoda-skill` — indexing requested (vercel-labs/skills#1970) |
+| [SkillsMP](https://skillsmp.com) | auto-crawled from this public repo (no submission needed) |
+| [SkillsCat](https://skills.cat) | auto-discovered; accelerated via `npx skillscat submit https://github.com/nodecoda/nodecoda-skill` |
+| [agentskill.sh](https://agentskill.sh) | submit at https://agentskill.sh/submit (web form) |
+| [SkillHub.cn](https://skillhub.cn) | published via `scripts/publish-skillhub.mjs` |
 
 ## License
 

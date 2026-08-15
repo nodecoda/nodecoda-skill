@@ -210,6 +210,19 @@ nodecoda-skill/
 | [nodecoda/nodecoda](https://github.com/nodecoda/nodecoda) | NodeCoda core：Workspace、MCP、语言工具链、前端（私有） |
 | [www.nodecoda.com](https://www.nodecoda.com) | 公有云：登录、API Key、MCP 网关、Web 工作台 |
 
+### Skill 市场平台
+
+Skill 以 `@nodecoda/skill`（npm）分发，并同步到主流 Agent Skill 聚合平台——完整同步指南与各平台状态见
+[docs/ecosystem-publishing.md](docs/ecosystem-publishing.md)。
+
+| 平台 | 安装 / 状态 |
+|---|---|
+| [skills.sh](https://skills.sh)（Vercel） | `npx skills add nodecoda/nodecoda-skill` — 已提索引请求（vercel-labs/skills#1970） |
+| [SkillsMP](https://skillsmp.com) | 自动爬取本公开仓库（无需提交） |
+| [SkillsCat](https://skills.cat) | 自动发现；可 `npx skillscat submit https://github.com/nodecoda/nodecoda-skill` 加速 |
+| [agentskill.sh](https://agentskill.sh) | 在 https://agentskill.sh/submit 提交（Web 表单） |
+| [SkillHub.cn](https://skillhub.cn) | 经 `scripts/publish-skillhub.mjs` 发布 |
+
 ## License
 
 Apache License 2.0 — 见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。

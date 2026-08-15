@@ -1,0 +1,10 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "groupings": [
+    {
+      "title": "NodeCoda",
+      "description": "Author, validate, and build Dify workflows via versioned NodeCoda Source and the NodeCoda MCP service.",
+      "skills": ["nodecoda-workflow"]
+    }
+  ]
+}
