@@ -13,12 +13,16 @@
 //   - otherwise                           -> guest JSON-RPC https://try.nodecoda.com/mcp
 // and the CLI submits -> polls to a terminal state -> saves the Dify Workflow
 // artifact + build record + a source copy under --out (default ./builds/).
+// Layout is flat and overwrite-on-every-build: <out>/<source-base>.dify.yaml
+// + .build.json + .ncoda. No per-build_id directory — versioning is left to
+// the user's git; build_id stays in the record (use save-build for explicit
+// historical snapshots).
 //
 // Usage:
 //   node scripts/build.mjs <file.ncoda> [options]
 //     --target <profile>        target profile (default dify-1.16-graphon-0.6)
 //     --idempotency-key <key>   override derived default (<base>-<sha256[:16]>)
-//     --out <dir>               output dir for saved build (default builds)
+//     --out <dir>               output dir (flat, default builds)
 //     --no-save                 don't write artifact/record to disk
 //     --timeout-ms <n>          poll timeout (default 300000)
 //     --dry-run                 validate transport + args, do not submit
@@ -109,7 +113,7 @@ export function usage() {
     'options:',
     '  --target <profile>        target profile (default dify-1.16-graphon-0.6)',
     '  --idempotency-key <key>   override derived default (<base>-<sha256[:16]>)',
-    '  --out <dir>               output dir for saved build (default builds)',
+    '  --out <dir>               output dir (flat, default builds)',
     '  --no-save                 don\'t write artifact/record to disk',
     '  --timeout-ms <n>          poll timeout in ms (default 300000)',
     '  --dry-run                 validate transport + args, do not submit',
@@ -231,17 +235,17 @@ async function finalize(rec, buildId, opts, source, { log, ...base }) {
   return { ...base, ok: true, status: 'SUCCEEDED', build: rec, saved, artifact: rec.artifact ?? null, build_id: rec?.build_id ?? buildId };
 }
 
-// Layout mirrors scripts/save-build.mjs: <out>/<build_id>/ with
-// <source-base>.dify.yaml + <source-base>.build.json + a client-side source
-// copy (the backend stores only source_sha256, not the source text).
+// Layout is flat and stable per source: <out>/<source-base>.dify.yaml +
+// <source-base>.build.json + a client-side source copy, overwritten on every
+// build (the backend stores only source_sha256, not the source text). No
+// per-build_id directory: versioning is the user's git responsibility, and
+// build_id stays inside the record for later save-build snapshots.
 async function saveArtifact(rec, opts, source, { log }) {
-  const buildId = rec.build_id ?? 'unknown';
-  const dir = join(opts.out, buildId);
-  await mkdir(dir, { recursive: true });
-  const sourceBase = (rec.source_filename || buildId).replace(/\.ncoda$/, '');
+  await mkdir(opts.out, { recursive: true });
+  const sourceBase = (rec.source_filename || basename(opts.file)).replace(/\.ncoda$/, '');
   const saved = [];
 
-  const recPath = join(dir, `${sourceBase}.build.json`);
+  const recPath = join(opts.out, `${sourceBase}.build.json`);
   await writeFile(recPath, JSON.stringify(rec, null, 2));
   saved.push(recPath);
 
@@ -249,12 +253,12 @@ async function saveArtifact(rec, opts, source, { log }) {
   if (a && typeof a.content === 'string') {
     const media = a.media_type ?? 'application/octet-stream';
     const ext = media.includes('yaml') ? 'yaml' : media.includes('json') ? 'json' : 'bin';
-    const artPath = join(dir, `${sourceBase}.dify.${ext}`);
+    const artPath = join(opts.out, `${sourceBase}.dify.${ext}`);
     await writeFile(artPath, a.content);
     saved.push(artPath);
     log(`artifact:  ${artPath} (sha256=${a.sha256 ?? '-'})`);
   } else if (a && typeof a.content_b64 === 'string') {
-    const artPath = join(dir, `${sourceBase}.dify.yaml`);
+    const artPath = join(opts.out, `${sourceBase}.dify.yaml`);
     await writeFile(artPath, Buffer.from(a.content_b64, 'base64'));
     saved.push(artPath);
     log(`artifact:  ${artPath} (sha256=${a.sha256 ?? '-'})`);
@@ -262,7 +266,7 @@ async function saveArtifact(rec, opts, source, { log }) {
     log('artifact:  none inline (build record saved; if you have a key, run save-build to fetch it)');
   }
 
-  const srcCopy = join(dir, basename(opts.file));
+  const srcCopy = join(opts.out, basename(opts.file));
   await copyFile(opts.file, srcCopy);
   saved.push(srcCopy);
   return saved;

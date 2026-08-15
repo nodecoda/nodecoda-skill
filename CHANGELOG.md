@@ -5,6 +5,23 @@ All notable changes to this distribution repository will be documented in this f
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.25] - 2026-08-15
+
+### Changed - 版本管理简化：build 产物平铺覆盖式，不再按 build_id 建目录
+
+- **`build <file.ncoda>` 落盘布局**：`builds/<build_id>/...` → `builds/<source-base>.dify.yaml`
+  + `.build.json` + `.ncoda` 平铺固定文件名，每次构建覆盖同名文件。版本化交由用户
+  主动 git 维护（改源码 → 重新 build → `git diff` → commit），不再每次构建生成新目录、
+  不再让 build_id 泄漏进磁盘路径。build_id 仍记录在 `.build.json` 中。
+- **职责分工**：`save-build <build_id>` 保留按 id 拉取历史快照语义（归档到
+  `builds/<build_id>/`，`--flat` 平铺）；日常构建/迭代走 `build` CLI。
+- **失败路径**：build CLI 失败时诊断在控制台、不落盘（避免失败也覆盖记录）；
+  需要留档用 `save-build` 拉取 `<build_id>.build.json`（含 diagnostics）。
+- **测试**：test-build 断言改为平铺路径，新增「同一源文件二次构建覆盖同名文件、
+  不新建 build_id 目录」回归；全量 0 失败。
+- **文档**：SKILL.md「产物保存」「MCP 回退」「最终报告」、project-workflow.md 项目
+  布局同步为 flat + git 管版本；save-build.mjs 头部注释标注历史归档职责。
+
 ## [0.2.24] - 2026-08-15
 
 ### Added - `nodecoda-skill build <file>` CLI 直连构建（打通无 MCP / 无 key 的 guest 路径）

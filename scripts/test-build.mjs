@@ -5,7 +5,7 @@
 // derivation, transport description, and the submit->poll->save flow across
 // SUCCEEDED / FAILED / exhausted / timeout / dry-run / no-artifact paths,
 // plus CLI dispatch wiring in scripts/cli.mjs.
-import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, rm, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
@@ -26,6 +26,7 @@ function section(t) { console.log(`\n${t}`); }
 const assert = (cond, msg) => { if (!cond) throw new Error(msg); };
 
 const ARTIFACT = 'app:\n  mode: workflow\nversion: 0.6.0\nname: test-flow\n';
+const ARTIFACT_V2 = 'app:\n  mode: workflow\nversion: 0.6.0\nname: test-flow-v2\n';
 const SOURCE = '@language nodecoda/1\n@mode workflow\nfunction main() -> string { return "hi"; }\n';
 
 async function tmpDir() { return mkdtemp(join(tmpdir(), 'nc-build-test-')); }
@@ -133,14 +134,25 @@ section('runBuild — happy path (submit -> poll -> SUCCEEDED -> save)');
     assert(fake.calls[0].name === 'build_dify_workflow' && fake.calls[0].args.source === SOURCE, 'submit args');
     assert(fake.calls[0].args.language_identity === 'nodecoda/1' && fake.calls[0].args.target_profile === DEFAULT_TARGET, 'contract fields');
     assert(/^demo-[0-9a-f]{16}$/.test(fake.calls[0].args.idempotency_key), 'derived idempotency key');
-    const art = join(out, 'b1', 'demo.dify.yaml');
-    const rec = join(out, 'b1', 'demo.build.json');
-    const src = join(out, 'b1', 'demo.ncoda');
+    const art = join(out, 'demo.dify.yaml');
+    const rec = join(out, 'demo.build.json');
+    const src = join(out, 'demo.ncoda');
     for (const p of [art, rec, src]) assert(existsSync(p), `saved ${p}`);
     assert((await readFile(art, 'utf8')) === ARTIFACT, 'artifact content');
     assert((await readFile(src, 'utf8')) === SOURCE, 'source copy');
     assert(result.saved.length === 3, 'three files reported');
-    ok('submit/poll/save with derived key');
+    // Rebuild the same source -> same flat paths overwritten, no new per-build dir.
+    const seq2 = [
+      { build_id: 'b9', status: 'queued', poll_after_ms: 1 },
+      { build_id: 'b9', status: 'SUCCEEDED', source_filename: 'demo.ncoda', artifact: { media_type: 'application/yaml', sha256: 'xyz', content: ARTIFACT_V2 } },
+    ];
+    const fake2 = fakeCaller(seq2);
+    await runBuild(opts, fastDeps(fake2.fn));
+    assert(existsSync(join(out, 'demo.dify.yaml')) && (await readFile(join(out, 'demo.dify.yaml'), 'utf8')) === ARTIFACT_V2, 'artifact overwritten');
+    assert(!existsSync(join(out, 'b9')), 'no per-build_id directory created');
+    const entries = (await readdir(out)).sort();
+    assert(JSON.stringify(entries) === JSON.stringify(['demo.build.json', 'demo.dify.yaml', 'demo.ncoda']), `flat layout only: ${entries}`);
+    ok('submit/poll/save with derived key + flat overwrite');
   } finally { await rm(dir, { recursive: true, force: true }); }
 }
 
@@ -258,7 +270,7 @@ section('runBuild — SUCCEEDED without inline artifact (record only)');
     const opts = parseBuildArgs([file, '--out', out]);
     const result = await runBuild(opts, fastDeps(fake.fn));
     assert(result.ok === true && result.saved.length === 2, 'record + source saved');
-    assert(existsSync(join(out, 'b4', 'demo.build.json')), 'record exists');
+    assert(existsSync(join(out, 'demo.build.json')), 'record exists');
     ok('no-artifact SUCCEEDED saves record only');
   } finally { await rm(dir, { recursive: true, force: true }); }
 }

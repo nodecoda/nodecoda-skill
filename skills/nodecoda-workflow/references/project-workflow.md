@@ -16,11 +16,14 @@ Detailed reference for the project mode. SKILL.md holds the protocol; this file 
 ├── design.md                # requirements artifact (lean deep-interview)
 ├── src/
 │   └── <name>.ncoda         # source-of-truth (recompilable)
-└── builds/                  # compile history (gitignore)
-    └── <build_id>/
-        ├── <name>.dify.yaml
-        ├── <name>.build.json
-        └── <name>.ncoda     # source snapshot for that build
+└── builds/                  # build outputs — flat, overwrite-every-build
+    ├── <name>.dify.yaml     # latest Dify artifact (git-managed versions)
+    ├── <name>.build.json    # latest build record (status, build_id, sha256)
+    └── <name>.ncoda         # latest source copy
+
+> 版本策略：`builds/` 不按 build_id 建目录、不保留旧版本——每次构建覆盖同名文件，
+> 版本化由你主动用 git 维护（改源码 → 重新 build → `git diff` → commit）。
+> 需要按 build_id 的历史快照时用 `npx -y @nodecoda/skill save-build <build_id>`。
 ```
 
 ## Manifest (`nodecoda.yaml`)

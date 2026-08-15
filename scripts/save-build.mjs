@@ -14,6 +14,12 @@
 // Usage:
 //   node scripts/save-build.mjs <build_id> [--source <file.ncoda>] [--out <dir>] [--base <url>] [--flat]
 //
+// This is the HISTORICAL-SNAPSHOT path: fetch one build by id into
+// <out>/<build_id>/ (or flat <out>/ with --flat). Day-to-day build/iterate
+// output is handled by the `build` CLI (scripts/build.mjs), which writes
+// flat, overwrite-on-every-build files under builds/ — versioning there is
+// the user's git, so no per-build_id directories pile up.
+//
 // Output (in <out>/<build_id>/ by default, or <out>/ when --flat):
 //   <source-base>.dify.yaml   compiled artifact (Dify Workflow YAML)
 //   <source-base>.build.json  full build record (status, sha256, diagnostics...)
