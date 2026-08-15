@@ -71,9 +71,9 @@ export function codexTomlBlock(server = MCP_SERVER, { mcpBase } = {}) {
     `startup_timeout_sec = 5`,
   ];
   if (mcpBase) {
-    lines.push(`env = { NODECODA_MCP_BASE = "${tomlEscape(mcpBase)}" }`);
-    lines.push(`# ^ 未配置 NODECODA_KEY 时，自动走 try.nodecoda.com 免费体验（无需注册）；`);
-    lines.push(`#   配置 NODECODA_KEY 后，移除该行或用 NODECODA_MCP_BASE 指回 www 正式实例。`);
+    lines.push(`env = { NODECODA_MCP_JSONRPC_URL = "${tomlEscape(mcpBase)}" }`);
+    lines.push(`# ^ 未配置 NODECODA_KEY 时，MCP 经 try.nodecoda.com/mcp（JSON-RPC 会话）免费体验；`);
+    lines.push(`#   配置 NODECODA_KEY 后走 www 正式实例（NODECODA_MCP_BASE 可覆盖 REST base）。`);
   }
   lines.push('');
   return lines.join('\n');
@@ -230,9 +230,10 @@ export async function registerMcp({
       ? join(homeDir, '.codex', 'config.toml')
       : join(projectDir, '.codex', 'config.toml');
     // K-E1: with no NODECODA_KEY configured, point the fresh install at the
-    // try free-experience instance so it works out of the box (placeholder
-    // key is synthesized by mcp-core at request time — nothing secret here).
-    const mcpBase = env.NODECODA_KEY ? undefined : 'https://try.nodecoda.com/v1';
+    // try free-experience MCP endpoint (JSON-RPC Streamable HTTP /mcp). Guest
+    // admission lives ONLY on /mcp with the placeholder key — try's /v1 REST
+    // surface strictly rejects it with 401 INVALID_API_KEY (verified 2026-08-15).
+    const mcpBase = env.NODECODA_KEY ? undefined : 'https://try.nodecoda.com/mcp';
     const r = await addCodexMcp(configPath, MCP_SERVER, { mcpBase });
     results.push({ target: `Codex (${configPath})`, r });
   } else if (platform === 'gemini-cli') {

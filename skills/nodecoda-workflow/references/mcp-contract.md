@@ -28,6 +28,17 @@ A successful admission returns `QUEUED`, a `build_id`, the selected identity fie
 
 ### Guest admission statuses (try.nodecoda.com, no key)
 
+> **Transport (verified 2026-08-15):** with no `NODECODA_KEY` the skill talks to
+> **`https://try.nodecoda.com/mcp`** over Streamable-HTTP JSON-RPC (sessionful:
+> initialize issues a `Mcp-Session-Id` header, responses are SSE `data:` frames,
+> tool results are double-encoded JSON in `result.content[0].text`). try's `/v1`
+> REST surface — like www's — strictly rejects the placeholder key with
+> `401 INVALID_API_KEY`; guest admission exists ONLY on `/mcp`. The try gateway
+> returns lowercase poll statuses (`succeeded`) and inlines the artifact in
+> `artifact.content`; the client normalizes poll statuses to the documented
+> uppercase contract below (admission statuses `queued`/`throttled`/`exhausted`
+> stay lowercase).
+
 On the free-try instance the admission answer is a **structured JSON status**
 (HTTP 200, inside `data`) — not a hard error, unless the global budget is
 exhausted (then HTTP 429 `GUEST_QUOTA_EXHAUSTED`):

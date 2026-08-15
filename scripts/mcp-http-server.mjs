@@ -36,7 +36,7 @@
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { handleMcpMessage, HttpError, PROTOCOL_VERSION, resolveUpstreamBase } from './mcp-core.mjs';
+import { handleMcpMessage, HttpError, PROTOCOL_VERSION, resolveUpstreamBase, upstreamMode } from './mcp-core.mjs';
 
 const invokedAsMain = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 
@@ -147,7 +147,10 @@ async function handlePost(req, res) {
   }
 
   const token = bearerToken(req) ?? process.env.NODECODA_KEY;
-  if (!token) {
+  // Guest (jsonrpc) mode mirrors the stdio server: anonymous requests are
+  // allowed — the transport synthesizes the placeholder key and the try /mcp
+  // gateway admits them as guest builds. REST mode keeps strict 401.
+  if (!token && upstreamMode() !== 'jsonrpc') {
     sendJson(res, 401, mcpErrorEnvelope(msg.id, -32001, 'UNAUTHORIZED: send Authorization: Bearer <key>, or set NODECODA_KEY'));
     return;
   }

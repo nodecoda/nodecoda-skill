@@ -222,7 +222,7 @@ npx -y @nodecoda/skill save-build <build_id> --source builds/<build_id>/<source_
 
 ## 免费体验（try.nodecoda.com）
 
-未配置 `NODECODA_KEY` 时，MCP 工具自动指向 **try.nodecoda.com** 的免费体验实例：无需注册、无需 key，开箱即 build。
+未配置 `NODECODA_KEY` 时，MCP 工具自动经 **try.nodecoda.com/mcp**（JSON-RPC Streamable HTTP，会话式）走免费体验实例：无需注册、无需 key，开箱即 build（传输自动切换，无需任何配置；try 的 `/v1` REST 面严格 401，guest 准入只在 `/mcp`，已验证 2026-08-15）。
 
 - **体验叙事**：注册前是「免费体验期」——不提配额、不显示剩余次数、不设倒计时、不制造稀缺感；让用户先成功完成一次构建（首交即魔术时刻），把注册留给配额真正用尽时。
 - **身份**：客户端自动生成并持久化设备 ID（`~/.nodecoda/device.json`，0600），构建以设备为单位记账；换机器会重新开始体验。
@@ -236,7 +236,7 @@ try 的 guest admission 返回**结构化 JSON 状态**（HTTP 200，包在 `dat
 
 | status | 含义 | 客户端处理 |
 |---|---|---|
-| `queued` | 放行，已入队 | 正常轮询；`quota.success_used` 可在**低干扰**下展示「已使用 N 次」——**不**渲染剩余次数、倒计时或稀缺话术 |
+| `queued` | 放行，已入队 | 正常轮询；`quota.success_used` 可在**低干扰**下展示「已使用 N 次」——**不**渲染剩余次数、倒计时或稀缺话术（轮询响应的状态已由客户端归一化为 `QUEUED`/`BUILDING`/`SUCCEEDED`/`FAILED`/`CANCELLED` 大写契约；try 的 artifact 内容内联在 poll 响应中） |
 | `throttled` | 瞬态限流（`reason=device_rate` / `ip_quota`） | MCP server 已自动按 `retry_after_ms` sleep 后退避重试**原提交**（同幂等 key），有界 ≤3 次；若最终仍返回 `throttled`（带 `_client_retries`），温和提示「服务器繁忙，稍等片刻再试」并附 quota 摘要，不硬报错、**不改 Source** |
 | `exhausted` | 设备日限软停（**非 error**） | 展示 server 下发的 `message`（温和文案）与「已使用 N 次」（`quota.success_used`）；`register_hint: true` 时附加注册引导话术；无倒计时 |
 
@@ -265,8 +265,10 @@ try 的 guest admission 返回**结构化 JSON 状态**（HTTP 200，包在 `dat
 | 项 | 值 |
 |---|---|
 | Workspace web | `https://www.nodecoda.com` |
-| MCP gateway base (build/poll/cancel) | `https://www.nodecoda.com/v1`（未配置 key 时自动走 `https://try.nodecoda.com/v1` 免费体验） |
-| 免费体验实例（无 key） | `https://try.nodecoda.com/v1`（`NODECODA_MCP_BASE` 可覆盖） |
+| MCP gateway base (build/poll/cancel, key 路径) | `https://www.nodecoda.com/v1`（REST；`NODECODA_MCP_BASE` 可覆盖） |
+| 免费体验实例（无 key，guest） | `https://try.nodecoda.com/mcp`（JSON-RPC Streamable HTTP；`NODECODA_MCP_JSONRPC_URL` 可覆盖） |
+
+**传输选择（自动）**：配置 `NODECODA_KEY` → REST 打 `/v1`；未配置 → 自动走 try `/mcp` 的 JSON-RPC guest 通路（零配置即用，占位 key 由客户端合成，无任何密钥落盘）。
 | Workspace admin base (login/keys) | `https://www.nodecoda.com/api/v1` |
 | Workflow Build | `POST {mcp_base}/workflow-builds` |
 | Workflow Poll | `GET {mcp_base}/workflow-builds/{build_id}` |

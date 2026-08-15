@@ -4,7 +4,8 @@
 
 Workspace 部署在 `https://www.nodecoda.com`。它把 `/api/v1/*` 作为公网 REST 网关，对外接受 Source + target profile，把请求内部转给 MCP 后端做异步构建。
 
-**MCP gateway base (build/poll/cancel)**: `https://www.nodecoda.com/v1`
+**MCP gateway base (build/poll/cancel, key 路径)**: `https://www.nodecoda.com/v1`（REST）
+**Guest 免费体验接入点（无 key，自动）**: `https://try.nodecoda.com/mcp`（JSON-RPC Streamable HTTP，会话式 `Mcp-Session-Id`；`NODECODA_MCP_JSONRPC_URL` 可覆盖）
 **Workspace admin base (login/keys)**: `https://www.nodecoda.com/api/v1`
 
 | Surface | Base | Endpoint |
@@ -13,7 +14,7 @@ Workspace 部署在 `https://www.nodecoda.com`。它把 `/api/v1/*` 作为公网
 | Readiness (no auth) | — | `GET https://www.nodecoda.com/health` |
 | Auth (login) | admin | `POST {admin}/auth/login` |
 | API Keys | admin | `POST {admin}/keys` |
-| Workflow Build | mcp | `POST {mcp}/workflow-builds` |
+| Workflow Build | mcp | `POST {mcp}/workflow-builds`（REST key 路径）/ `POST https://try.nodecoda.com/mcp`（guest JSON-RPC `tools/call build_dify_workflow`） |
 | Workflow Poll | mcp | `GET {mcp}/workflow-builds/{id}` |
 | Workflow Cancel | mcp | `DELETE {mcp}/workflow-builds/{id}` |
 
@@ -90,6 +91,8 @@ enabled = true
 | `/mcp` 路由已生效（不再被 SPA catch-all 接管） | `.codex/config.example.toml`、`docs/installation.md`、本页"状态与故障提示" | 2026-08-12 |
 | `Idempotency-Key` header 必须与 body `idempotency_key` 双份一致（单份 400） | `references/mcp-contract.md` "Transport requirement"、本页 REST curl | 2026-08-14 |
 | try guest admission 返回结构化 `throttled` / `exhausted` + `quota` 块（`success_used` / `register_hint` / `resets_in_seconds`）；软停文案"明天自动重置"+「注册可享专属服务器」 | `references/mcp-contract.md` "Guest admission statuses"、`nodecoda-guest-rate-limit-model.md` §6 | 2026-08-15 |
+| try 的 guest 准入**只在 `/mcp`**（JSON-RPC 会话式：initialize 发 `Mcp-Session-Id` 头、响应为 SSE `data:` 帧、工具结果为双重编码 JSON；占位 key `Bearer placeholder-key`）；try `/v1` REST 面与 www 一样对占位 key 严格 `401 INVALID_API_KEY` | 本页"Guest 节流 / 软停"、`references/mcp-contract.md` "Guest admission statuses" | 2026-08-15 |
+| try `/mcp` 返回小写状态（`queued`/`succeeded`）、artifact 内容**内联**在 poll 响应 `artifact.content`；skill 客户端把 poll 状态归一化为大写契约 | `references/mcp-contract.md` "Guest admission statuses" | 2026-08-15 |
 
 ## 客户端配置
 
@@ -148,7 +151,7 @@ enabled = true
 
 ### Guest 节流 / 软停（try 实例，无 key）
 
-try 的 guest admission 是**结构化 JSON 状态**（`references/mcp-contract.md` "Guest admission statuses"）：
+guest 传输：无 `NODECODA_KEY` 时 skill 自动走 try `/mcp` 的 JSON-RPC 通路（`Mcp-Session-Id` 会话 + SSE 帧；try `/v1` REST 面不开放 guest，已验证 2026-08-15）。admission 是**结构化 JSON 状态**（`references/mcp-contract.md` "Guest admission statuses"）：
 
 - `status: "throttled"`（瞬态限流，`reason=device_rate` / `ip_quota`）：按 `retry_after_ms` sleep 后**重放同一提交**（同幂等 key），最多 3 次；MCP server（`mcp-core.mjs`）已自动完成，最终仍 throttled 时结果带 `_client_retries` 注解。
 - `status: "exhausted"`（设备日限软停，非 error）：**不重试**；展示服务端 `message` 与已用次数 `quota.success_used`，`register_hint: true` 时才附加注册引导。无倒计时、无稀缺话术。

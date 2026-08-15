@@ -44,8 +44,12 @@ console.log('device-id persistence (K-E3)');
   rmSync(dir, { recursive: true, force: true });
 }
 
-console.log('guest identity headers (K-E2)');
+console.log('guest identity headers (K-E2, JSON-RPC /mcp)');
 {
+  // The no-key guest path now talks JSON-RPC to try /mcp (sessionful, SSE,
+  // double-encoded tool results). Stub that surface and assert the identity
+  // headers (placeholder bearer + device id + client version) on the first
+  // upstream request (initialize).
   const captured = [];
   const srv = createServer((req, res) => {
     captured.push({
@@ -53,13 +57,32 @@ console.log('guest identity headers (K-E2)');
       dev: req.headers['x-nodecoda-device-id'] ?? null,
       client: req.headers['x-nodecoda-client'] ?? null,
     });
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ code: 0, message: 'ok', data: { ok: true } }));
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      let msg = null;
+      try { msg = JSON.parse(body); } catch { msg = null; }
+      const sse = (obj) => {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.writeHead(200);
+        res.end(`event: message\ndata: ${JSON.stringify(obj)}\n\n`);
+      };
+      if (msg?.method === 'initialize') {
+        res.setHeader('Mcp-Session-Id', 'sess-1');
+        sse({ jsonrpc: '2.0', id: msg.id, result: { protocolVersion: '2025-03-26', capabilities: {}, serverInfo: { name: 'stub', version: '1' } } });
+      } else if (msg?.method === 'notifications/initialized') {
+        res.writeHead(202); res.end('');
+      } else {
+        sse({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: JSON.stringify({ status: 'queued', build_id: 'x', poll_after_ms: 10, quota: {} }) }] } });
+      }
+    });
   });
   await new Promise((r) => srv.listen(0, r));
   const port = srv.address().port;
-  process.env.NODECODA_MCP_BASE = `http://127.0.0.1:${port}`;
+  process.env.NODECODA_MCP_JSONRPC_URL = `http://127.0.0.1:${port}/mcp`;
   delete process.env.NODECODA_KEY;
+  delete process.env.NODECODA_MCP_BASE;
+  delete process.env.NODECODA_MCP_TRANSPORT;
 
   const { handleMcpMessage } = await import(`./mcp-core.mjs?${Date.now()}`);
   const msg = {
@@ -68,7 +91,7 @@ console.log('guest identity headers (K-E2)');
       source: 'node {}', source_filename: 'a.ncoda', language_identity: 'nodecoda/1',
       target_profile: 'dify-1.16-graphon-0.6', idempotency_key: 'k1' } },
   };
-  await handleMcpMessage(msg); // upstream stub returns 200; result may be a poll shape
+  await handleMcpMessage(msg);
   await sleep(150);
   srv.close();
 

@@ -5,6 +5,35 @@ All notable changes to this distribution repository will be documented in this f
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.22] - 2026-08-15
+
+### Fixed - Guest 传输切换为 JSON-RPC `/mcp`（"默认 MCP 即用 try" 关键修复）
+
+- **根因**：K-E1 曾把无 key 安装指向 `NODECODA_MCP_BASE=https://try.nodecoda.com/v1`（REST），
+  但 try 的 guest 准入**只在 `/mcp`**（Streamable-HTTP JSON-RPC，会话式）——`/v1` REST 面与 www
+  一样对占位 key 严格 `401 INVALID_API_KEY`（实测 2026-08-15）。旧接线会导致无 key 用户每次
+  build 都 401。
+- **修复**：`mcp-core.mjs` 新增双传输。无 `NODECODA_KEY`（且未显式指定）→ 自动走
+  **JSON-RPC guest 通路**：`POST https://try.nodecoda.com/mcp`（默认，`NODECODA_MCP_JSONRPC_URL`
+  可覆盖），initialize 取 `Mcp-Session-Id` 会话头、解析 SSE `data:` 帧、解双重编码
+  `result.content[0].text`；有 `NODECODA_KEY` → 保持 REST `/v1`（www/自托管）不变。
+  新增 `NODECODA_MCP_TRANSPORT=rest|jsonrpc` 显式引脚（自托管/测试）。
+- **状态归一化**：try `/mcp` 返回小写状态（`succeeded`/`queued`），客户端把 poll 响应归一化为
+  文档契约大写（`QUEUED`/`BUILDING`/`SUCCEEDED`/`FAILED`/`CANCELLED`）；admission 状态
+  （`queued`/`throttled`/`exhausted`）保持小写；try 的 artifact **内联**在 poll 响应
+  `artifact.content`（无需 /artifact REST）。
+- **throttle/exhausted 适配**：`submitWithThrottleRetry` 与 K-E6 软停透传对两种传输同样生效
+  （JSON-RPC 通路实测 throttled 自动退避、exhausted 透传不重试）。
+- **HTTP server 鉴权**：guest（jsonrpc）模式允许匿名请求（与 stdio server 一致，零配置即用）；
+  REST 模式保持严格 401。
+- **注册接线**：`mcp-register.mjs` guest 安装写入 `NODECODA_MCP_JSONRPC_URL=https://try.nodecoda.com/mcp`。
+- **测试**：`test-http-server.mjs` 新增 JSON-RPC /mcp 本地 stub（会话 + SSE + 双重编码）——
+  guest 准入（queued + quota + device 头）、匿名零配置准入、throttled 自动重试、exhausted 透传、
+  poll 状态归一化 + artifact 内联；REST 测试显式引脚 `NODECODA_MCP_TRANSPORT=rest`。HTTP server
+  测试 26/26 绿。
+- **实测**：零配置默认 stdio MCP → try `/mcp`：admission `queued`（quota 块 success_used=0）→
+  poll `SUCCEEDED` → artifact 内联 YAML（1292B）。
+
 ## [0.2.21] - 2026-08-15
 
 ### Added - Guest free-campaign MCP wiring（PRD 模块 E · K-E1~E5）

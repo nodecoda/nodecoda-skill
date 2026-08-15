@@ -11,13 +11,34 @@
 //
 // Pure Node 18+ built-ins, no dependencies.
 
-// The public MCP gateway base is https://www.nodecoda.com/v1 — the one
-// surface that accepts opaque sk-... keys for Workflow Build. The /api/v1
-// admin base only accepts JWT management credentials and rejects sk- keys
-// with 401 INVALID_TOKEN. NODECODA_MCP_BASE / NODECODA_API_BASE overrides
-// exist for self-hosted deployments.
+// Two upstream transports, selected by config (see upstreamMode below):
+//   - REST  : {base}/workflow-builds over plain HTTP. Used for key-authenticated
+//             traffic against https://www.nodecoda.com/v1 (opaque sk-... keys)
+//             or a self-hosted deployment. NODECODA_MCP_BASE / NODECODA_API_BASE
+//             overrides exist for self-hosting.
+//   - JSONRPC: Streamable-HTTP JSON-RPC against the deployment's /mcp endpoint
+//             (sessionful, Mcp-Session-Id + SSE frames). The try free-experience
+//             instance admits guests ONLY on /mcp with the placeholder key —
+//             its /v1 REST surface strictly rejects it with 401 INVALID_API_KEY
+//             (verified 2026-08-15), so no-key installs must use /mcp.
+// With no NODECODA_KEY and no explicit JSONRPC URL the skill defaults to the
+// public try /mcp (K-E1: zero-config guest free-experience).
 export function resolveUpstreamBase(env = process.env) {
   return (env.NODECODA_MCP_BASE || env.NODECODA_API_BASE || 'https://www.nodecoda.com/v1').replace(/\/$/, '');
+}
+export function resolveJsonRpcUrl(env = process.env) {
+  return (env.NODECODA_MCP_JSONRPC_URL || 'https://try.nodecoda.com/mcp').replace(/\/$/, '');
+}
+// Transport decision:
+//   NODECODA_MCP_TRANSPORT=rest|jsonrpc  -> explicit pin (self-host / tests)
+//   NODECODA_MCP_JSONRPC_URL set         -> JSONRPC (explicit operator intent)
+//   NODECODA_KEY set                     -> REST (key-authenticated www/self-hosted)
+//   otherwise                            -> JSONRPC (guest default: try /mcp)
+export function upstreamMode(env = process.env) {
+  if (env.NODECODA_MCP_TRANSPORT === 'rest' || env.NODECODA_MCP_TRANSPORT === 'jsonrpc') return env.NODECODA_MCP_TRANSPORT;
+  if (env.NODECODA_MCP_JSONRPC_URL) return 'jsonrpc';
+  if (env.NODECODA_KEY) return 'rest';
+  return 'jsonrpc';
 }
 import { loadDeviceId } from './device-id.mjs';
 import { readFileSync } from 'node:fs';
@@ -26,8 +47,9 @@ import { fileURLToPath } from 'node:url';
 const API_BASE = resolveUpstreamBase();
 
 // K-E2: guest campaign placeholder key. When NODECODA_KEY is absent the skill
-// still sends a well-formed bearer token; try.nodecoda.com's loose admission
-// serves it as a guest build (S-B1), while www strictly rejects it with 401.
+// still sends a well-formed bearer token; try.nodecoda.com's /mcp loose
+// admission serves it as a guest build (S-B1), while www's /v1 REST surface
+// (and try's /v1) strictly reject it with 401 INVALID_API_KEY.
 const GUEST_PLACEHOLDER_KEY = 'sk-try-placeholder';
 // X-NodeCoda-Client attribution header (S-B3): derived from package.json at
 // runtime so it tracks the installed skill version without manual upkeep.
@@ -131,6 +153,88 @@ async function apiFetch(path, { method = 'GET', body, headers = {}, token } = {}
   return parsed;
 }
 
+// ---- JSON-RPC upstream (try /mcp guest transport) -------------------------
+// The deployment's Streamable-HTTP MCP endpoint is sessionful: initialize
+// returns a Mcp-Session-Id response header that must be echoed on subsequent
+// requests, and POST responses come back as SSE frames (`event: message` /
+// `data: <jsonrpc>`). Tool results are double-encoded JSON: the inner payload
+// lives in result.content[0].text. The try gateway uses lowercase statuses
+// (queued / succeeded / ...) — poll responses are normalized to the documented
+// uppercase contract (QUEUED / SUCCEEDED / FAILED / CANCELLED / ...) so agents
+// following mcp-contract.md keep working; admission statuses (queued /
+// throttled / exhausted) are left as-is per the guest contract.
+const POLL_STATUS_ALIASES = {
+  queued: 'QUEUED', building: 'BUILDING', cancelling: 'CANCELLING',
+  succeeded: 'SUCCEEDED', failed: 'FAILED', cancelled: 'CANCELLED',
+};
+
+function normalizePollStatus(payload) {
+  if (payload && typeof payload === 'object' && typeof payload.status === 'string') {
+    const upper = POLL_STATUS_ALIASES[payload.status.toLowerCase()];
+    if (upper) payload.status = upper;
+  }
+  return payload;
+}
+
+class JsonRpcUpstream {
+  constructor(url) {
+    this.url = url;
+    this.session = null;
+    this._sessionReady = null;
+  }
+  async ensureSession() {
+    if (this._sessionReady) return this._sessionReady;
+    this._sessionReady = (async () => {
+      const body = {
+        jsonrpc: '2.0', id: 1, method: 'initialize',
+        params: { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: 'nodecoda-skill', version: clientVersion() } },
+      };
+      const res = await fetch(this.url, { method: 'POST', headers: this._headers(), body: JSON.stringify(body) });
+      if (!res.ok) throw new HttpError(res.status, await res.text(), Object.fromEntries(res.headers));
+      this.session = res.headers.get('mcp-session-id');
+      await this._post({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} });
+      return this.session;
+    })();
+    return this._sessionReady;
+  }
+  _headers() {
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${GUEST_PLACEHOLDER_KEY}`,
+      'X-NodeCoda-Device-Id': loadDeviceId(),
+      'X-NodeCoda-Client': `nodecoda-skill/${clientVersion()}`,
+      ...(this.session ? { 'Mcp-Session-Id': this.session } : {}),
+    };
+  }
+  async _post(body) {
+    const res = await fetch(this.url, { method: 'POST', headers: this._headers(), body: JSON.stringify(body) });
+    const raw = await res.text();
+    if (!res.ok) throw new HttpError(res.status, raw, Object.fromEntries(res.headers));
+    const msgs = [];
+    for (const line of raw.split('\n')) {
+      if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+        try { msgs.push(JSON.parse(line.slice(6))); } catch { /* keep-alive / non-JSON frame */ }
+      }
+    }
+    if (msgs.length === 0) {
+      // Some gateways answer application/json directly instead of SSE.
+      try { msgs.push(JSON.parse(raw)); } catch { /* not JSON either */ }
+    }
+    return msgs;
+  }
+  async call(name, args) {
+    await this.ensureSession();
+    const msgs = await this._post({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } });
+    const last = [...msgs].reverse().find((m) => m && (m.id === 2 || m.result || m.error));
+    if (!last) throw new Error(`MCP gateway returned no response for ${name}`);
+    if (last.error) return { error: last.error, message: last.error?.message ?? String(last.error.code ?? '') };
+    const text = last.result?.content?.[0]?.text;
+    if (typeof text === 'string') {
+      try { return JSON.parse(text); } catch { return { content: text }; }
+    }
+    return last.result ?? {};
+  }
+}
 
 // ---- guest throttle retry -------------------------------------------------
 // try.nodecoda.com's guest admission is progressive: when the device/IP has
@@ -175,11 +279,16 @@ function unwrap(body) {
   return body;
 }
 
+// Transport instance selection (module load, mirrors existing API_BASE style).
+const MODE = upstreamMode();
+const upstream = MODE === 'jsonrpc' ? new JsonRpcUpstream(resolveJsonRpcUrl()) : null;
+
 const TOOL_HANDLERS = {
   // Per references/mcp-contract.md: same idempotency_key in the body AND the
-  // Idempotency-Key header. We forward both for safety.
+  // Idempotency-Key header. We forward both for safety (REST mode).
   build_dify_workflow: async (args, token) => {
     return submitWithThrottleRetry(async () => {
+      if (upstream) return upstream.call('build_dify_workflow', args);
       const data = await apiFetch('/workflow-builds', {
         method: 'POST',
         body: args,
@@ -190,6 +299,11 @@ const TOOL_HANDLERS = {
     });
   },
   get_workflow_build: async (args, token) => {
+    if (upstream) {
+      // try /mcp returns the artifact content inline and lowercase statuses;
+      // normalize poll statuses to the documented uppercase contract.
+      return normalizePollStatus(await upstream.call('get_workflow_build', args));
+    }
     const data = await apiFetch(`/workflow-builds/${encodeURIComponent(args.build_id)}`, { method: 'GET', token });
     const b = unwrap(data);
     // mcp-contract.md promises a SUCCEEDED response carries
@@ -212,6 +326,7 @@ const TOOL_HANDLERS = {
     return b ?? data;
   },
   cancel_workflow_build: async (args, token) => {
+    if (upstream) return upstream.call('cancel_workflow_build', args);
     const data = await apiFetch(`/workflow-builds/${encodeURIComponent(args.build_id)}`, { method: 'DELETE', token });
     return unwrap(data);
   },

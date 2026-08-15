@@ -128,7 +128,7 @@ const stubPort = stub.address().port;
 // ---- spawn the MCP HTTP server on an ephemeral port ---------------------
 
 const child = spawn(process.execPath, [join(REPO_ROOT, 'scripts/mcp-http-server.mjs'), '--port', '0'], {
-  env: { ...process.env, NODECODA_API_BASE: `http://127.0.0.1:${stubPort}` },
+  env: { ...process.env, NODECODA_MCP_TRANSPORT: 'rest', NODECODA_API_BASE: `http://127.0.0.1:${stubPort}` },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 let out = '';
@@ -299,7 +299,7 @@ console.log('http MCP server tests');
 // 13. cli.mjs `mcp --http` wiring (npx zero-install path, HTTP transport)
 {
   const cli = spawn(process.execPath, [join(REPO_ROOT, 'scripts/cli.mjs'), 'mcp', '--http', '--port', '0'], {
-    env: { ...process.env, NODECODA_API_BASE: `http://127.0.0.1:${stubPort}` },
+    env: { ...process.env, NODECODA_MCP_TRANSPORT: 'rest', NODECODA_API_BASE: `http://127.0.0.1:${stubPort}` },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   let cliOut = '';
@@ -385,6 +385,166 @@ console.log('http MCP server tests');
     bad('queued quota passthrough', `status=${r.status} text=${text.slice(0, 220)}`);
   }
 }
+
+// ===========================================================================
+// Guest JSON-RPC transport tests (try /mcp behaviour, local stub)
+// ===========================================================================
+console.log('jsonrpc guest transport tests (try /mcp)');
+
+// Sessionful Streamable-HTTP MCP stub: initialize issues Mcp-Session-Id,
+// notifications/initialized is a 202, tools/call answers with SSE frames and
+// double-encoded tool results (text = inner JSON). Lowercase statuses like the
+// real try gateway; poll normalization is asserted on the client side.
+const jrAuth = [];
+const jrDevice = [];
+const jrBuildPosts = [];
+const jrStub = createServer((req, res) => {
+  jrAuth.push(req.headers.authorization ?? null);
+  jrDevice.push(req.headers['x-nodecoda-device-id'] ?? null);
+  let body = '';
+  req.on('data', (c) => { body += c; });
+  req.on('end', () => {
+    let msg = null;
+    try { msg = JSON.parse(body); } catch { msg = null; }
+    const sse = (obj, status = 200) => {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.writeHead(status);
+      res.end(`event: message\ndata: ${JSON.stringify(obj)}\n\n`);
+    };
+    if (!msg) { res.writeHead(400); res.end('{}'); return; }
+    if (msg.method === 'initialize') {
+      res.setHeader('Mcp-Session-Id', 'sess-1');
+      sse({ jsonrpc: '2.0', id: msg.id, result: { protocolVersion: '2025-03-26', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'NodeCoda MCP', version: 'stub' } } });
+      return;
+    }
+    if (msg.method === 'notifications/initialized') { res.writeHead(202); res.end(''); return; }
+    if (msg.method === 'tools/call') {
+      const name = msg.params?.name;
+      const args = msg.params?.arguments ?? {};
+      const idem = args.idempotency_key ?? '';
+      if (name === 'build_dify_workflow') {
+        jrBuildPosts.push(idem);
+        const quota = { mode: 'on', success: 50, success_used: 0, diagnostic: 30, resets_in_seconds: 86400, register_hint: false };
+        if (idem.startsWith('throttle-then-ok-')) {
+          const n = jrBuildPosts.filter((k) => k === idem).length;
+          if (n <= 1) sse({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: JSON.stringify({ status: 'throttled', reason: 'device_rate', retry_after_ms: 30, quota }) }] } });
+          else sse({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: JSON.stringify({ build_id: `job_${idem}`, status: 'queued', poll_after_ms: 500, quota }) }] } });
+          return;
+        }
+        if (idem.startsWith('exhausted-')) {
+          sse({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: JSON.stringify({ status: 'exhausted', code: 'GUEST_QUOTA_EXHAUSTED', message: '今天的免费构建额度已用完，明天自动重置。', quota: { ...quota, success_used: 50, register_hint: true } }) }] } });
+          return;
+        }
+        sse({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: JSON.stringify({ build_id: `job_${idem}`, status: 'queued', poll_after_ms: 500, quota }) }] } });
+        return;
+      }
+      if (name === 'get_workflow_build') {
+        sse({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: JSON.stringify({ build_id: args.build_id, status: 'succeeded', artifact: { media_type: 'application/yaml', sha256: 'abc123', content: 'app:\n  mode: workflow\nkind: app\n' } }) }] } });
+        return;
+      }
+      sse({ jsonrpc: '2.0', id: msg.id, error: { code: -32602, message: `unknown tool \"${name}\"` } });
+      return;
+    }
+    sse({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'not implemented' } });
+  });
+});
+await new Promise((r) => jrStub.listen(0, '127.0.0.1', r));
+const jrPort = jrStub.address().port;
+
+const jrChild = spawn(process.execPath, [join(REPO_ROOT, 'scripts/mcp-http-server.mjs'), '--port', '0'], {
+  // Guest mode: no NODECODA_KEY, explicit JSONRPC URL against the local stub.
+  env: { ...process.env, NODECODA_MCP_JSONRPC_URL: `http://127.0.0.1:${jrPort}/mcp` },
+  stdio: ['ignore', 'pipe', 'inherit'],
+});
+let jrOut = '';
+jrChild.stdout.on('data', (b) => { jrOut += b.toString('utf8'); });
+let jrMcpPort = null;
+const jrDeadline = Date.now() + 5000;
+while (!jrMcpPort && Date.now() < jrDeadline) {
+  const m = /ready:\s+http:\/\/127\.0\.0\.1:(\d+)\/mcp/.exec(jrOut);
+  if (m) jrMcpPort = Number(m[1]);
+  if (!jrMcpPort) await sleep(50);
+}
+if (!jrMcpPort) {
+  console.error('JSON-RPC MCP server did not report a port:\n' + jrOut);
+  process.exit(2);
+}
+
+// 18. guest admission: JSON-RPC session + queued + quota (lowercase kept)
+{
+  const r = await httpReq('POST', '/mcp', {
+    port: jrMcpPort,
+    headers: AUTH,
+    body: { jsonrpc: '2.0', id: 18, method: 'tools/call', params: { name: 'build_dify_workflow', arguments: { source: 'x', source_filename: 'x.ncoda', language_identity: 'nodecoda/1', target_profile: 'dify-1.16-graphon-0.6', idempotency_key: 'guest-ok-1' } } },
+  });
+  const p = JSON.parse(r.body);
+  const text = p?.result?.content?.[0]?.text ?? '';
+  const deviceOk = jrDevice.some((d) => typeof d === 'string' && d.startsWith('nodecoda-'));
+  if (r.status === 200 && text.includes('"status": "queued"') && text.includes('success_used') && text.includes('poll_after_ms') && deviceOk) {
+    ok('guest build via JSON-RPC /mcp returns queued + quota + device header');
+  } else {
+    bad('guest JSON-RPC build', `status=${r.status} deviceOk=${deviceOk} text=${text.slice(0, 220)}`);
+  }
+}
+
+// 18b. anonymous guest (no bearer, zero-config) admitted via JSON-RPC /mcp
+{
+  const r = await httpReq('POST', '/mcp', {
+    port: jrMcpPort,
+    body: { jsonrpc: '2.0', id: 180, method: 'tools/call', params: { name: 'build_dify_workflow', arguments: { source: 'x', source_filename: 'x.ncoda', language_identity: 'nodecoda/1', target_profile: 'dify-1.16-graphon-0.6', idempotency_key: 'anon-guest-1' } } },
+  });
+  const p = JSON.parse(r.body);
+  const text = p?.result?.content?.[0]?.text ?? '';
+  if (r.status === 200 && text.includes('"status": "queued"')) ok('anonymous guest (no key, no bearer) admitted via JSON-RPC /mcp');
+  else bad('anonymous guest admission', `status=${r.status} text=${text.slice(0, 200)}`);
+}
+
+// 19. guest throttled -> auto backoff retry -> queued
+{
+  const r = await httpReq('POST', '/mcp', {
+    port: jrMcpPort,
+    headers: AUTH,
+    body: { jsonrpc: '2.0', id: 19, method: 'tools/call', params: { name: 'build_dify_workflow', arguments: { source: 'x', source_filename: 'x.ncoda', language_identity: 'nodecoda/1', target_profile: 'dify-1.16-graphon-0.6', idempotency_key: 'throttle-then-ok-g1' } } },
+  });
+  const p = JSON.parse(r.body);
+  const text = p?.result?.content?.[0]?.text ?? '';
+  const posts = jrBuildPosts.filter((k) => k === 'throttle-then-ok-g1').length;
+  if (r.status === 200 && text.includes('"status": "queued"') && posts === 2) ok('jsonrpc throttled admission auto-retries (2 submits) then succeeds');
+  else bad('jsonrpc throttle retry', `status=${r.status} posts=${posts} text=${text.slice(0, 220)}`);
+}
+
+// 20. guest exhausted soft stop -> pass through, never retried
+{
+  const r = await httpReq('POST', '/mcp', {
+    port: jrMcpPort,
+    headers: AUTH,
+    body: { jsonrpc: '2.0', id: 20, method: 'tools/call', params: { name: 'build_dify_workflow', arguments: { source: 'x', source_filename: 'x.ncoda', language_identity: 'nodecoda/1', target_profile: 'dify-1.16-graphon-0.6', idempotency_key: 'exhausted-g1' } } },
+  });
+  const p = JSON.parse(r.body);
+  const text = p?.result?.content?.[0]?.text ?? '';
+  const posts = jrBuildPosts.filter((k) => k === 'exhausted-g1').length;
+  if (r.status === 200 && text.includes('GUEST_QUOTA_EXHAUSTED') && text.includes('register_hint') && posts === 1) ok('jsonrpc exhausted soft stop passes through, no retry');
+  else bad('jsonrpc exhausted', `status=${r.status} posts=${posts} text=${text.slice(0, 220)}`);
+}
+
+// 21. poll status normalization: lowercase succeeded -> SUCCEEDED + inline artifact
+{
+  const r = await httpReq('POST', '/mcp', {
+    port: jrMcpPort,
+    headers: AUTH,
+    body: { jsonrpc: '2.0', id: 21, method: 'tools/call', params: { name: 'get_workflow_build', arguments: { build_id: 'job_x' } } },
+  });
+  const p = JSON.parse(r.body);
+  const text = p?.result?.content?.[0]?.text ?? '';
+  if (r.status === 200 && text.includes('"status": "SUCCEEDED"') && text.includes('"content": "app:\\n  mode: workflow')) {
+    ok('jsonrpc poll normalizes succeeded -> SUCCEEDED, artifact inline');
+  } else {
+    bad('jsonrpc poll normalize', `status=${r.status} text=${text.slice(0, 240)}`);
+  }
+}
+
+jrChild.kill();
+jrStub.close();
 
 // ---- cleanup ------------------------------------------------------------
 
