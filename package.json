@@ -1,6 +1,6 @@
 {
   "name": "@nodecoda/skill",
-  "version": "0.2.22",
+  "version": "0.2.23",
   "description": "AI agent skills for NodeCoda — teach coding agents to author .ncoda Source and use the NodeCoda MCP service",
   "license": "Apache-2.0",
   "type": "module",

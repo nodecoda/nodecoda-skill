@@ -41,6 +41,23 @@ console.log('mcp-core upstream base regression');
     else bad(name, `expected ${expected}, got ${got}`);
   }
 }
+console.log('mcp-core transport mode regression');
+{
+  const { upstreamMode } = await import(`./mcp-core.mjs?t=${Date.now()}`);
+  const cases = [
+    ['no key, no url -> guest jsonrpc (try /mcp)', {}, 'jsonrpc'],
+    ['key set -> rest (www)', { NODECODA_KEY: 'sk-x' }, 'rest'],
+    ['jsonrpc url set, no key -> jsonrpc (explicit guest)', { NODECODA_MCP_JSONRPC_URL: 'https://try.nodecoda.com/mcp' }, 'jsonrpc'],
+    ['key + stale jsonrpc url -> rest (key is intent proof)', { NODECODA_KEY: 'sk-x', NODECODA_MCP_JSONRPC_URL: 'https://try.nodecoda.com/mcp' }, 'rest'],
+    ['transport pin rest wins over key', { NODECODA_MCP_TRANSPORT: 'rest', NODECODA_KEY: 'sk-x', NODECODA_MCP_JSONRPC_URL: 'https://try.nodecoda.com/mcp' }, 'rest'],
+    ['transport pin jsonrpc wins over key', { NODECODA_MCP_TRANSPORT: 'jsonrpc', NODECODA_KEY: 'sk-x' }, 'jsonrpc'],
+  ];
+  for (const [name, env, expected] of cases) {
+    const got = upstreamMode(env);
+    if (got === expected) ok(name);
+    else bad(name, `expected ${expected}, got ${got}`);
+  }
+}
 console.log('http MCP server tests');
 
 // ---- local upstream REST stub ------------------------------------------
@@ -453,7 +470,7 @@ const jrPort = jrStub.address().port;
 
 const jrChild = spawn(process.execPath, [join(REPO_ROOT, 'scripts/mcp-http-server.mjs'), '--port', '0'], {
   // Guest mode: no NODECODA_KEY, explicit JSONRPC URL against the local stub.
-  env: { ...process.env, NODECODA_MCP_JSONRPC_URL: `http://127.0.0.1:${jrPort}/mcp` },
+  env: { ...process.env, NODECODA_MCP_JSONRPC_URL: `http://127.0.0.1:${jrPort}/mcp`, NODECODA_KEY: '' },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 let jrOut = '';

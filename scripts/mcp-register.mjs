@@ -73,7 +73,8 @@ export function codexTomlBlock(server = MCP_SERVER, { mcpBase } = {}) {
   if (mcpBase) {
     lines.push(`env = { NODECODA_MCP_JSONRPC_URL = "${tomlEscape(mcpBase)}" }`);
     lines.push(`# ^ 未配置 NODECODA_KEY 时，MCP 经 try.nodecoda.com/mcp（JSON-RPC 会话）免费体验；`);
-    lines.push(`#   配置 NODECODA_KEY 后走 www 正式实例（NODECODA_MCP_BASE 可覆盖 REST base）。`);
+    lines.push(`#   配置 NODECODA_KEY 后自动走 www 正式实例（key 优先于本 guest 配置，无需改这里）；`);
+    lines.push(`#   自托管 REST 用 NODECODA_MCP_BASE 覆盖。`);
   }
   lines.push('');
   return lines.join('\n');

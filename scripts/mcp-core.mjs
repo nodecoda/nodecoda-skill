@@ -29,15 +29,19 @@ export function resolveUpstreamBase(env = process.env) {
 export function resolveJsonRpcUrl(env = process.env) {
   return (env.NODECODA_MCP_JSONRPC_URL || 'https://try.nodecoda.com/mcp').replace(/\/$/, '');
 }
-// Transport decision:
-//   NODECODA_MCP_TRANSPORT=rest|jsonrpc  -> explicit pin (self-host / tests)
-//   NODECODA_MCP_JSONRPC_URL set         -> JSONRPC (explicit operator intent)
-//   NODECODA_KEY set                     -> REST (key-authenticated www/self-hosted)
-//   otherwise                            -> JSONRPC (guest default: try /mcp)
+// Transport decision (product contract, see README/K-E1):
+//   1. NODECODA_MCP_TRANSPORT=rest|jsonrpc -> explicit pin (self-host / tests)
+//   2. NODECODA_KEY set                    -> REST (key = intent proof; the user
+//        chose the paid path, so it wins over any stale guest JSONRPC_URL from
+//        an earlier keyless install — covers "install without key, then set key")
+//   3. NODECODA_MCP_JSONRPC_URL set        -> JSONRPC (guest, explicit override)
+//   4. otherwise                           -> JSONRPC (guest default: try /mcp)
+// Result: no key = free experience on try.nodecoda.com out of the box; a valid
+// key = www.nodecoda.com. Users without intent to pay can stay free forever.
 export function upstreamMode(env = process.env) {
   if (env.NODECODA_MCP_TRANSPORT === 'rest' || env.NODECODA_MCP_TRANSPORT === 'jsonrpc') return env.NODECODA_MCP_TRANSPORT;
-  if (env.NODECODA_MCP_JSONRPC_URL) return 'jsonrpc';
   if (env.NODECODA_KEY) return 'rest';
+  if (env.NODECODA_MCP_JSONRPC_URL) return 'jsonrpc';
   return 'jsonrpc';
 }
 import { loadDeviceId } from './device-id.mjs';

@@ -268,7 +268,7 @@ try 的 guest admission 返回**结构化 JSON 状态**（HTTP 200，包在 `dat
 | MCP gateway base (build/poll/cancel, key 路径) | `https://www.nodecoda.com/v1`（REST；`NODECODA_MCP_BASE` 可覆盖） |
 | 免费体验实例（无 key，guest） | `https://try.nodecoda.com/mcp`（JSON-RPC Streamable HTTP；`NODECODA_MCP_JSONRPC_URL` 可覆盖） |
 
-**传输选择（自动）**：配置 `NODECODA_KEY` → REST 打 `/v1`；未配置 → 自动走 try `/mcp` 的 JSON-RPC guest 通路（零配置即用，占位 key 由客户端合成，无任何密钥落盘）。
+**传输选择（自动，产品契约）**：设置 `NODECODA_KEY` → REST 打 www `/v1`（key 是付费意愿证明，**优先于**任何 guest 配置——先无 key 安装、后补 key 也自动切到 www）；未设置 key → 自动走 try `/mcp` 的 JSON-RPC guest 通路（零配置即用，占位 key 由客户端合成，无任何密钥落盘）。无付费意愿的用户可一直使用免费体验（设备日限 50 次/天，用尽软停、明天自动重置）。
 | Workspace admin base (login/keys) | `https://www.nodecoda.com/api/v1` |
 | Workflow Build | `POST {mcp_base}/workflow-builds` |
 | Workflow Poll | `GET {mcp_base}/workflow-builds/{build_id}` |

@@ -5,6 +5,20 @@ All notable changes to this distribution repository will be documented in this f
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.23] - 2026-08-15
+
+### Fixed - key 优先于 guest 配置（产品契约：无 key=try 免费，有 key=www 正式）
+
+- **场景**：用户先无 key 安装（config 写入 `NODECODA_MCP_JSONRPC_URL=try /mcp`），
+  之后在 agent 环境设置 `NODECODA_KEY` 期望切到 www —— 旧优先级 JSONRPC_URL 高于 key，
+  会继续走 try，违背"设置 key = 意愿证明 → 连 www"的契约。
+- **修复**：`upstreamMode` 优先级调整为
+  `NODECODA_MCP_TRANSPORT` 引脚 > `NODECODA_KEY`（→REST www）> `NODECODA_MCP_JSONRPC_URL`（→JSONRPC）> 默认 guest JSONRPC try。
+  有 key 一律走 REST www，无论 config 是否残留 guest 接线；无 key 依旧零配置走 try 免费体验。
+- **测试**：新增 6 项 transport-mode 优先级回归（含 key+stale-jsonrpc-url → rest、引脚覆盖）；
+  JSON-RPC 测试 spawn 隔离宿主 `NODECODA_KEY`。HTTP server 测试 32/32 绿。
+- 文档同步：SKILL.md 传输选择段、mcp-register 注释（"配置 NODECODA_KEY 后自动走 www，无需改配置"）。
+
 ## [0.2.22] - 2026-08-15
 
 ### Fixed - Guest 传输切换为 JSON-RPC `/mcp`（"默认 MCP 即用 try" 关键修复）
