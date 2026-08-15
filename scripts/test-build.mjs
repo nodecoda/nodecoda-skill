@@ -56,7 +56,7 @@ const fastDeps = (fn, emit = () => {}) => ({ callTool: fn, now: Date.now, sleep:
 section('parseBuildArgs — defaults');
 {
   const o = parseBuildArgs(['x.ncoda']);
-  assert(o.file === 'x.ncoda' && o.target === DEFAULT_TARGET && o.out === 'builds', 'defaults');
+  assert(o.file === 'x.ncoda' && o.target === DEFAULT_TARGET && o.out === null, 'defaults (out defaults to source dir)');
   assert(o.save === true && o.dryRun === false && o.json === false && o.timeoutMs === DEFAULT_TIMEOUT_MS, 'default flags');
   assert(o.pollIntervalMs === null, 'no poll override');
   ok('defaults');
@@ -136,11 +136,9 @@ section('runBuild — happy path (submit -> poll -> SUCCEEDED -> save)');
     assert(/^demo-[0-9a-f]{16}$/.test(fake.calls[0].args.idempotency_key), 'derived idempotency key');
     const art = join(out, 'demo.dify.yaml');
     const rec = join(out, 'demo.build.json');
-    const src = join(out, 'demo.ncoda');
-    for (const p of [art, rec, src]) assert(existsSync(p), `saved ${p}`);
+    for (const p of [art, rec]) assert(existsSync(p), `saved ${p}`);
     assert((await readFile(art, 'utf8')) === ARTIFACT, 'artifact content');
-    assert((await readFile(src, 'utf8')) === SOURCE, 'source copy');
-    assert(result.saved.length === 3, 'three files reported');
+    assert(result.saved.length === 2, 'artifact + record only (no source copy)');
     // Rebuild the same source -> same flat paths overwritten, no new per-build dir.
     const seq2 = [
       { build_id: 'b9', status: 'queued', poll_after_ms: 1 },
@@ -151,8 +149,28 @@ section('runBuild — happy path (submit -> poll -> SUCCEEDED -> save)');
     assert(existsSync(join(out, 'demo.dify.yaml')) && (await readFile(join(out, 'demo.dify.yaml'), 'utf8')) === ARTIFACT_V2, 'artifact overwritten');
     assert(!existsSync(join(out, 'b9')), 'no per-build_id directory created');
     const entries = (await readdir(out)).sort();
-    assert(JSON.stringify(entries) === JSON.stringify(['demo.build.json', 'demo.dify.yaml', 'demo.ncoda']), `flat layout only: ${entries}`);
+    assert(JSON.stringify(entries) === JSON.stringify(['demo.build.json', 'demo.dify.yaml']), `flat layout only: ${entries}`);
     ok('submit/poll/save with derived key + flat overwrite');
+  } finally { await rm(dir, { recursive: true, force: true }); }
+}
+
+section('runBuild — default output lands next to the source (no --out)');
+{
+  const dir = await tmpDir();
+  try {
+    const file = await withSourceFile(dir); // demo.ncoda inside dir
+    const seq = [
+      { build_id: 'b7', status: 'queued', poll_after_ms: 1 },
+      { build_id: 'b7', status: 'SUCCEEDED', source_filename: 'demo.ncoda', artifact: { media_type: 'application/yaml', sha256: 'abc', content: ARTIFACT } },
+    ];
+    const fake = fakeCaller(seq);
+    const opts = parseBuildArgs([file, '--poll-interval-ms', '1']); // no --out
+    const result = await runBuild(opts, fastDeps(fake.fn));
+    assert(result.ok && result.saved.length === 2, 'artifact + record saved');
+    assert(existsSync(join(dir, 'demo.dify.yaml')), 'artifact beside source');
+    assert(existsSync(join(dir, 'demo.build.json')), 'record beside source');
+    assert(!existsSync(join(dir, 'builds')), 'no builds/ directory created');
+    ok('default out = source directory, one dir for everything');
   } finally { await rm(dir, { recursive: true, force: true }); }
 }
 
@@ -269,7 +287,7 @@ section('runBuild — SUCCEEDED without inline artifact (record only)');
     const out = join(dir, 'out');
     const opts = parseBuildArgs([file, '--out', out]);
     const result = await runBuild(opts, fastDeps(fake.fn));
-    assert(result.ok === true && result.saved.length === 2, 'record + source saved');
+    assert(result.ok === true && result.saved.length === 1, 'record saved (no artifact, no source copy)');
     assert(existsSync(join(out, 'demo.build.json')), 'record exists');
     ok('no-artifact SUCCEEDED saves record only');
   } finally { await rm(dir, { recursive: true, force: true }); }

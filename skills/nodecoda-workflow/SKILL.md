@@ -43,7 +43,7 @@ description: Use when designing, writing, building, diagnosing, or revising Node
 
 **恢复**：会话中断后 `npx -y @nodecoda/skill project get-state .` 回到对应阶段，不重问需求。
 
-**产物保存**：日常构建/迭代用 `npx -y @nodecoda/skill build <file.ncoda>`——产物平铺覆盖到 `builds/<source-base>.dify.yaml` + `.build.json` + `.ncoda`，**不按 build_id 建目录**，版本由你主动 `git commit` 维护；`save-build <build_id>` 仅用于按 id 拉取历史快照（归档到 `builds/<build_id>/`）。
+**产物保存**：日常构建/迭代用 `npx -y @nodecoda/skill build <file.ncoda>`——产物写到**源文件同目录**：`<source-base>.dify.yaml` + `.build.json`，覆盖式、不按 build_id 建目录、无 source 副本，版本由你主动 `git commit` 维护；`save-build <build_id>` 仅用于按 id 拉取历史快照（归档到 `builds/<build_id>/`）。
 
 **轻量模式（可选）**：只验证 `.ncoda` 片段、排查单点时不建项目，但需声明"这是临时验证"。完整规则见 `references/project-workflow.md`。
 
@@ -63,10 +63,10 @@ NodeCoda Key 只存在于 MCP 客户端配置中。不要要求、读取、打�
 
 > 1. **CLI 直连构建（最省事，无需 MCP 客户端、无需 key）** — `npx -y @nodecoda/skill build <file.ncoda>`：
 >    自动选路（无 `NODECODA_KEY` → try.nodecoda.com guest JSON-RPC；有 `NODECODA_KEY` → www REST），
->    提交 → 轮询到终态 → SUCCEEDED 自动把 Dify Workflow artifact + build 记录 + source 副本
->    平铺覆盖落盘到 `./builds/`（`<source-base>.dify.yaml` 等，不建 build_id 目录，版本交给 git）。
->    其余 flag：`--target` / `--idempotency-key` / `--out` / `--no-save` / `--timeout-ms` /
->    `--dry-run` / `--json`。
+>    提交 → 轮询到终态 → SUCCEEDED 自动把 Dify Workflow artifact + build 记录
+>    平铺覆盖落盘到源文件同目录（`<source-base>.dify.yaml` 等，不建 build_id 目录、
+>    无 source 副本，版本交给 git）。其余 flag：`--target` / `--idempotency-key` /
+>    `--out` / `--no-save` / `--timeout-ms` / `--dry-run` / `--json`。
 > 2. 有 key 时走「公共部署 · REST 直连回退」curl 配方（见下），凭据只从环境读取。
 > 3. 工具缺失但必须走 MCP 时，报告安装指引并提醒重启会话，不要假装已具备能力。
 ## 工作流程
@@ -179,18 +179,23 @@ Source 不超过 64 KiB；artifact 不超过 256 KiB；诊断最多 100 条。
 
 ### 7. 产物保存
 
-**布局（flat、覆盖式、git 管版本）**：每次构建的产物写入仓库 `builds/` 下固定文件名，**不按 build_id 建目录**、不保留旧版本——版本化由你主动用 git 维护（改源码 → 重新 build → `git diff` 看变化 → commit）。后端只存 `source_sha256` 哈希，**不存 Source 原文**（无 source 下载端点），且 artifact 约 24 小时、诊断约 7 天过期——不落盘即丢失。
+**布局（一个目录、覆盖式、git 管版本）**：源和产物放在同一个目录（默认输出就是
+源文件所在目录），每次构建覆盖固定文件名，**不拆分 src/builds、不按 build_id
+建目录、不保留旧版本、无 source 副本**——版本化由你主动用 git 维护
+（改源码 → 重新 build → `git diff` 看变化 → commit）。后端只存 `source_sha256`
+哈希，**不存 Source 原文**（无 source 下载端点），且 artifact 约 24 小时、诊断约
+7 天过期——不落盘即丢失。
 
-- 成功时（`build <file.ncoda>` 自动写入）：
-  - `builds/<source-base>.ncoda` — 最终提交的 Source 原文（客户端侧副本）
-  - `builds/<source-base>.dify.yaml` — 最终产物（Dify Workflow artifact）
-  - `builds/<source-base>.build.json` — build 记录（status、build_id、SHA256、诊断）
+- 成功时（`build <file.ncoda>` 自动写入源文件同目录）：
+  - `<source-base>.ncoda` — 源文件（你手写维护，产物与它同目录）
+  - `<source-base>.dify.yaml` — 最终产物（Dify Workflow artifact）
+  - `<source-base>.build.json` — build 记录（status、build_id、SHA256、诊断）
   - `design.md` — 需求分析阶段的设计说明（中间产物，推荐保留）
 - 失败时：build CLI 在控制台输出诊断、不落盘；如需留档，用 `save-build <build_id>` 拉取记录（`<build_id>.build.json` 含 diagnostics）。
 - 历史快照（按 build_id 显式归档，`builds/<build_id>/`）：
 
 ```bash
-npx -y @nodecoda/skill save-build <build_id> --source src/<name>.ncoda --out builds
+npx -y @nodecoda/skill save-build <build_id> --source <name>.ncoda
 # 仓库 clone 内也可用 node scripts/save-build.mjs
 ```
 
@@ -206,7 +211,7 @@ npx -y @nodecoda/skill save-build <build_id> --source src/<name>.ncoda --out bui
 - Source SHA256 与 artifact SHA256；
 - 最终 `.ncoda` Source；
 - Dify Workflow artifact；
-- **保存路径**（`builds/<source-base>.dify.yaml` / `.build.json` / `.ncoda`，中间产物与最终产物均已落盘；版本由 git 维护）；
+- **保存路径**（源文件同目录的 `<source-base>.dify.yaml` / `.build.json`，中间产物与最终产物均已落盘；版本由 git 维护）；
 - 修复次数和仍需在 Dify 中配置的外部依赖；
 - 声明未执行目标平台运行时测试。
 

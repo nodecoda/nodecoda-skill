@@ -109,7 +109,7 @@ export NODECODA_KEY=sk-...   # 写进你的 shell profile
 ## 你的代理从此会什么
 
 - **3 个 MCP 工具** — `build_dify_workflow`、`get_workflow_build`、`cancel_workflow_build`
-- **项目模式** — 一个工作流 = 一个目录（`nodecoda.yaml` + `nodecoda.state.json` + `src/*.ncoda`），生命周期状态机 `INIT → CLARIFYING → DESIGNED → SOURCE_READY → BUILDING → SUCCEEDED`；会话断了也不怕，回来接着干
+- **项目模式** — 一个工作流 = 一个目录（`nodecoda.yaml` + `nodecoda.state.json` + `<name>.ncoda`），生命周期状态机 `INIT → CLARIFYING → DESIGNED → SOURCE_READY → BUILDING → SUCCEEDED`；会话断了也不怕，回来接着干
 - **诊断而不是玄学** — L1→L4 每个阶段都给出机器可读的诊断，修复循环 ≤5 轮收敛
 - **凭据安全** — Key 只存在于 MCP 客户端配置，绝不进入源码、prompt 或 artifact
 

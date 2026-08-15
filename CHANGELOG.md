@@ -5,6 +5,24 @@ All notable changes to this distribution repository will be documented in this f
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.27] - 2026-08-15
+
+### Changed - 减法:去掉 src/builds 拆分,一个目录管全部(源 + 产物)
+
+按「不过度设计、降低心智负担」原则收敛目录结构:
+- **build 默认输出 = 源文件同目录**:`build <file.ncoda>` 把 `<source-base>.dify.yaml`
+  + `.build.json` 写到源文件旁边,不再默认 `builds/`(--out 保留作显式重定向)。
+- **删除 source 副本**:源就在输出目录里,不再复制 `<name>.ncoda`(减一个文件、
+  一段逻辑、一组断言)。
+- **project init 不再建 src/ 和 builds/**:源文件直接落在项目根
+  (`<project>.ncoda`),manifest `source` 同步;不再创建空目录脚手架。
+- **.gitignore 删除 builds/ 条目**:产物默认进 git,版本化完全交给用户
+  (与「版本由你主动 git 维护」自洽;save-build 的历史归档由用户决定是否提交)。
+- **测试**:+「默认输出 = 源目录、无 builds/ 目录、无 source 副本」;happy path
+  断言 3 文件→2 文件;init 断言无 src//builds/;examples/project 源文件移到根。
+- **文档**:SKILL.md 产物保存/回退/最终报告、project-workflow.md 项目布局、
+  Hash fidelity 与 Build loop 的路径全部改为单目录。
+
 ## [0.2.26] - 2026-08-15
 
 ### Added - 打包完整性校验测试 + device-id 漏包回归 (test-package-integrity)

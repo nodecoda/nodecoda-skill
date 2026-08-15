@@ -2,5 +2,5 @@ project: customer-support
 mode: workflow
 target_profile: dify-1.16-graphon-0.6
 language_identity: nodecoda/1
-source: src/customer-support.ncoda
+source: customer-support.ncoda
 created_at: "2026-08-12T00:00:00Z"

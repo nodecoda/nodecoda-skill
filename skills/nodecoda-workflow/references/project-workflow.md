@@ -14,15 +14,13 @@ Detailed reference for the project mode. SKILL.md holds the protocol; this file 
 ├── nodecoda.yaml            # manifest (agent-maintained YAML)
 ├── nodecoda.state.json      # state machine state (project.mjs-maintained JSON)
 ├── design.md                # requirements artifact (lean deep-interview)
-├── src/
-│   └── <name>.ncoda         # source-of-truth (recompilable)
-└── builds/                  # build outputs — flat, overwrite-every-build
-    ├── <name>.dify.yaml     # latest Dify artifact (git-managed versions)
-    ├── <name>.build.json    # latest build record (status, build_id, sha256)
-    └── <name>.ncoda         # latest source copy
+├── <name>.ncoda             # source-of-truth (recompilable)
+├── <name>.dify.yaml         # latest Dify artifact (overwritten every build)
+└── <name>.build.json        # latest build record (status, build_id, sha256)
 
-> 版本策略：`builds/` 不按 build_id 建目录、不保留旧版本——每次构建覆盖同名文件，
-> 版本化由你主动用 git 维护（改源码 → 重新 build → `git diff` → commit）。
+> 版本策略：一个目录管全部——源和产物放一起，不拆分 src/builds、不按 build_id
+> 建目录、不保留旧版本：每次构建覆盖同名文件，版本化由你主动用 git 维护
+> （改源码 → 重新 build → `git diff` → commit）。
 > 需要按 build_id 的历史快照时用 `npx -y @nodecoda/skill save-build <build_id>`。
 ```
 
@@ -33,7 +31,7 @@ project: customer-support
 mode: advanced-chat
 target_profile: dify-1.16-graphon-0.6
 language_identity: nodecoda/1
-source: src/customer-support.ncoda
+source: customer-support.ncoda
 created_at: "2026-08-12T..."
 ```
 
@@ -85,8 +83,8 @@ On any session start inside a project dir, run `npx -y @nodecoda/skill project g
 - CLARIFYING/DESIGNED: continue or finalize design.md
 - SOURCE_READY: submit build
 - BUILDING: poll `get_workflow_build` with `current_build_id`
-- NEEDS_FIX: read `last_diagnostics`, edit src, set-state SOURCE_READY
-- SUCCEEDED: deliver; or edit src to rebuild
+- NEEDS_FIX: read `last_diagnostics`, edit <name>.ncoda, set-state SOURCE_READY
+- SUCCEEDED: deliver; or edit <name>.ncoda to rebuild
 - FAILED/CANCELLED: report terminal state, do not auto-retry
 
 ## Lean deep-interview (project creation)
@@ -102,9 +100,9 @@ One question at a time, intent-first, max 5 rounds. If input/output/mode/boundar
 ```
 SOURCE_READY -> build_dify_workflow(idempotency_key=<project>-rev-<n>)
   -> poll get_workflow_build (<=180s, admission <=3)
-  -> SUCCEEDED: npx -y @nodecoda/skill save-build <build_id> --source src/<name>.ncoda --out builds
+  -> SUCCEEDED: npx -y @nodecoda/skill save-build <build_id> --source <name>.ncoda
        + set-state SUCCEEDED --sha256 <hash>
-  -> NEEDS_FIX: set-state NEEDS_FIX --diagnostics '<json>'; edit src; set-state SOURCE_READY (rev+1); loop <=5
+  -> NEEDS_FIX: set-state NEEDS_FIX --diagnostics '<json>'; edit <name>.ncoda; set-state SOURCE_READY (rev+1); loop <=5
   -> FAILED/CANCELLED: terminal, keep diagnostics
 ```
 
@@ -125,7 +123,7 @@ npx -y @nodecoda/skill project set-state ./my-flow SUCCEEDED --sha256 <hash>
 
 ## Hash fidelity
 
-Saved `src/<name>.ncoda` bytes MUST equal the bytes passed to `build_dify_workflow`. The backend hashes exact submitted bytes (no trailing-newline normalization). If `source_sha256 != sha256(saved file)`, stop and reconcile.
+Saved `<name>.ncoda` bytes MUST equal the bytes passed to `build_dify_workflow`. The backend hashes exact submitted bytes (no trailing-newline normalization). If `source_sha256 != sha256(saved file)`, stop and reconcile.
 
 ## Credentials
 

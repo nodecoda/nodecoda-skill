@@ -605,7 +605,7 @@ async function smokeCliProject() {
   try {
     const dir = join(tmp, 'pf');
     const init = spawnSync(process.execPath, [join(REPO_ROOT, 'scripts/cli.mjs'), 'project', 'init', dir, '--project', 'pf', '--mode', 'workflow'], { cwd: tmp, encoding: 'utf8' });
-    const okInit = init.status === 0 && existsSync(join(dir, 'nodecoda.yaml')) && existsSync(join(dir, 'nodecoda.state.json')) && existsSync(join(dir, 'src', 'pf.ncoda'));
+    const okInit = init.status === 0 && existsSync(join(dir, 'nodecoda.yaml')) && existsSync(join(dir, 'nodecoda.state.json')) && existsSync(join(dir, 'pf.ncoda')) && !existsSync(join(dir, 'src')) && !existsSync(join(dir, 'builds'));
     if (okInit) ok('cli project init creates project scaffolding');
     else bad('cli project init creates project scaffolding', `status=${init.status} out=${(init.stdout || '').slice(0, 200)}`);
 

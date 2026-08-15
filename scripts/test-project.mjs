@@ -27,8 +27,8 @@ await P.init(dir, { project: 'demo', mode: 'workflow' });
 ok('init creates nodecoda.yaml', existsSync(join(dir, 'nodecoda.yaml')));
 ok('init creates nodecoda.state.json', existsSync(join(dir, 'nodecoda.state.json')));
 ok('init creates design.md', existsSync(join(dir, 'design.md')));
-ok('init creates src/demo.ncoda', existsSync(join(dir, 'src/demo.ncoda')));
-ok('init creates builds/', existsSync(join(dir, 'builds')));
+ok('init creates demo.ncoda at project root', existsSync(join(dir, 'demo.ncoda')));
+ok('init does not create src/ or builds/', !existsSync(join(dir, 'src')) && !existsSync(join(dir, 'builds')));
 eq('init state.phase=INIT', (await P.getState(dir)).phase, 'INIT');
 
 // --- set-state transitions + rev auto-increment ---
@@ -93,7 +93,7 @@ eq('resolve rejects empty dir', (await P.resolve(dir2)).project, false);
 ok('state.json is valid JSON', !!JSON.parse(await readFile(join(dir, 'nodecoda.state.json'), 'utf-8')));
 
 // --- validate-project.mjs ---
-eq('valid manifest passes', validateManifest('project: demo\nmode: workflow\ntarget_profile: dify-1.16-graphon-0.6\nlanguage_identity: nodecoda/1\nsource: src/demo.ncoda\n'), []);
+eq('valid manifest passes', validateManifest('project: demo\nmode: workflow\ntarget_profile: dify-1.16-graphon-0.6\nlanguage_identity: nodecoda/1\nsource: demo.ncoda\n'), []);
 ok('manifest missing key detected', validateManifest('mode: workflow\n').includes('manifest missing key: project'));
 ok('invalid mode detected', validateManifest('project: x\nmode: bogus\ntarget_profile: t\nlanguage_identity: l\nsource: s\n').some(e => e.startsWith('invalid mode')));
 eq('valid state passes', validateState(P.initialState()), []);

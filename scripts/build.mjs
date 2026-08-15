@@ -12,17 +12,17 @@
 //   - NODECODA_MCP_JSONRPC_URL set        -> guest JSON-RPC override
 //   - otherwise                           -> guest JSON-RPC https://try.nodecoda.com/mcp
 // and the CLI submits -> polls to a terminal state -> saves the Dify Workflow
-// artifact + build record + a source copy under --out (default ./builds/).
-// Layout is flat and overwrite-on-every-build: <out>/<source-base>.dify.yaml
-// + .build.json + .ncoda. No per-build_id directory — versioning is left to
-// the user's git; build_id stays in the record (use save-build for explicit
-// historical snapshots).
+// artifact + build record next to the source file by default (--out overrides).
+// Layout is flat and overwrite-on-every-build: <dir>/<source-base>.dify.yaml
+// + .build.json. No per-build_id directory, no source copy (the source already
+// lives beside the output) — versioning is left to the user's git; build_id
+// stays in the record (use save-build for explicit historical snapshots).
 //
 // Usage:
 //   node scripts/build.mjs <file.ncoda> [options]
 //     --target <profile>        target profile (default dify-1.16-graphon-0.6)
 //     --idempotency-key <key>   override derived default (<base>-<sha256[:16]>)
-//     --out <dir>               output dir (flat, default builds)
+//     --out <dir>               output dir (default: alongside the source file)
 //     --no-save                 don't write artifact/record to disk
 //     --timeout-ms <n>          poll timeout (default 300000)
 //     --dry-run                 validate transport + args, do not submit
@@ -31,10 +31,10 @@
 // Exit codes: 0 = SUCCEEDED (artifact saved unless --no-save)
 //             2 = build failed / exhausted / usage error
 //             1 = unexpected error
-import { readFile, mkdir, writeFile, copyFile } from 'node:fs/promises';
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { join, resolve, basename } from 'node:path';
+import { join, resolve, basename, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { callTool, createToolCaller, upstreamMode, resolveJsonRpcUrl, resolveUpstreamBase } from './mcp-core.mjs';
 
@@ -50,7 +50,7 @@ export function parseBuildArgs(argv = process.argv.slice(2)) {
     file: null,
     target: DEFAULT_TARGET,
     idempotencyKey: null,
-    out: 'builds',
+    out: null, // default: source file's directory
     save: true,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     pollIntervalMs: null,
@@ -113,7 +113,7 @@ export function usage() {
     'options:',
     '  --target <profile>        target profile (default dify-1.16-graphon-0.6)',
     '  --idempotency-key <key>   override derived default (<base>-<sha256[:16]>)',
-    '  --out <dir>               output dir (flat, default builds)',
+    '  --out <dir>               output dir (default: alongside the source file)',
     '  --no-save                 don\'t write artifact/record to disk',
     '  --timeout-ms <n>          poll timeout in ms (default 300000)',
     '  --dry-run                 validate transport + args, do not submit',
@@ -236,16 +236,19 @@ async function finalize(rec, buildId, opts, source, { log, ...base }) {
 }
 
 // Layout is flat and stable per source: <out>/<source-base>.dify.yaml +
-// <source-base>.build.json + a client-side source copy, overwritten on every
-// build (the backend stores only source_sha256, not the source text). No
-// per-build_id directory: versioning is the user's git responsibility, and
-// build_id stays inside the record for later save-build snapshots.
+// <source-base>.build.json, overwritten on every build. Default output is the
+// source file's own directory — source and artifacts live side by side in ONE
+// directory, and the user versions everything with git (the backend stores
+// only source_sha256, not the source text, so nothing is lost: the source is
+// right there). No per-build_id directory, no source copy. build_id stays in
+// the record for later save-build snapshots.
 async function saveArtifact(rec, opts, source, { log }) {
-  await mkdir(opts.out, { recursive: true });
+  const outDir = opts.out ?? dirname(resolve(opts.file));
+  await mkdir(outDir, { recursive: true });
   const sourceBase = (rec.source_filename || basename(opts.file)).replace(/\.ncoda$/, '');
   const saved = [];
 
-  const recPath = join(opts.out, `${sourceBase}.build.json`);
+  const recPath = join(outDir, `${sourceBase}.build.json`);
   await writeFile(recPath, JSON.stringify(rec, null, 2));
   saved.push(recPath);
 
@@ -253,12 +256,12 @@ async function saveArtifact(rec, opts, source, { log }) {
   if (a && typeof a.content === 'string') {
     const media = a.media_type ?? 'application/octet-stream';
     const ext = media.includes('yaml') ? 'yaml' : media.includes('json') ? 'json' : 'bin';
-    const artPath = join(opts.out, `${sourceBase}.dify.${ext}`);
+    const artPath = join(outDir, `${sourceBase}.dify.${ext}`);
     await writeFile(artPath, a.content);
     saved.push(artPath);
     log(`artifact:  ${artPath} (sha256=${a.sha256 ?? '-'})`);
   } else if (a && typeof a.content_b64 === 'string') {
-    const artPath = join(opts.out, `${sourceBase}.dify.yaml`);
+    const artPath = join(outDir, `${sourceBase}.dify.yaml`);
     await writeFile(artPath, Buffer.from(a.content_b64, 'base64'));
     saved.push(artPath);
     log(`artifact:  ${artPath} (sha256=${a.sha256 ?? '-'})`);
@@ -266,9 +269,6 @@ async function saveArtifact(rec, opts, source, { log }) {
     log('artifact:  none inline (build record saved; if you have a key, run save-build to fetch it)');
   }
 
-  const srcCopy = join(opts.out, basename(opts.file));
-  await copyFile(opts.file, srcCopy);
-  saved.push(srcCopy);
   return saved;
 }
 
@@ -285,7 +285,7 @@ async function main() {
   if (opts.json) {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   } else if (result.ok) {
-    const where = result.saved?.length ? ` — ${result.saved.length} file(s) saved under ${opts.out}/` : '';
+    const where = result.saved?.length ? ` — ${result.saved.length} file(s) saved under ${dirname(resolve(result.saved[0]))}` : '';
     console.log(`\n✓ SUCCEEDED  build_id=${result.build_id ?? result.build?.build_id ?? '-'}${where}`);
   } else {
     console.error(`\n✖ ${result.reason === 'exhausted' ? result.message : `Build ${result.status ?? 'failed'} (${result.reason})`}`);

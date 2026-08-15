@@ -119,7 +119,7 @@ and it will fix its own mistakes when a build fails, using the diagnostics.
 ## What your agent can do now
 
 - **3 MCP tools** — `build_dify_workflow`, `get_workflow_build`, `cancel_workflow_build`
-- **Project mode** — one workflow = one folder (`nodecoda.yaml` + `nodecoda.state.json` + `src/*.ncoda`), with a lifecycle state machine (`INIT → CLARIFYING → DESIGNED → SOURCE_READY → BUILDING → SUCCEEDED`). Interrupted a session? Pick up where you left off.
+- **Project mode** — one workflow = one folder (`nodecoda.yaml` + `nodecoda.state.json` + `<name>.ncoda`), with a lifecycle state machine (`INIT → CLARIFYING → DESIGNED → SOURCE_READY → BUILDING → SUCCEEDED`). Interrupted a session? Pick up where you left off.
 - **Diagnostics, not mysteries** — every stage (L1→L4) contributes machine-readable diagnostics; the fix loop converges in ≤5 rounds
 - **Credentials stay safe** — keys live only in MCP client config, never in source, prompts, or artifacts
 

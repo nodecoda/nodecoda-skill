@@ -44,14 +44,12 @@ function designTemplate() {
 export async function init(dir, { project, mode, target = DEFAULT_TARGET, language = DEFAULT_LANGUAGE }) {
   if (!project) throw new Error('--project is required');
   if (mode !== 'workflow' && mode !== 'advanced-chat') throw new Error('--mode must be workflow or advanced-chat');
-  const srcDir = path.join(dir, 'src');
-  await mkdir(srcDir, { recursive: true });
-  await mkdir(path.join(dir, 'builds'), { recursive: true });
-  const sourceRel = `src/${project}.ncoda`;
+  await mkdir(dir, { recursive: true });
+  const sourceRel = `${project}.ncoda`;
   await writeFile(path.join(dir, 'nodecoda.yaml'), manifestYaml({ project, mode, target, language, source: sourceRel }));
   await writeFile(path.join(dir, 'nodecoda.state.json'), JSON.stringify(initialState(), null, 2) + '\n');
   await writeFile(path.join(dir, 'design.md'), designTemplate());
-  await writeFile(path.join(srcDir, `${project}.ncoda`),
+  await writeFile(path.join(dir, `${project}.ncoda`),
     `@language ${language}\n@mode ${mode}\n\nfunction main(string query) -> string {\n    return query;\n}\n`);
   return { dir, source: sourceRel };
 }
