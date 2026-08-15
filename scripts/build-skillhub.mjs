@@ -159,6 +159,50 @@ async function build() {
     await copyFile(abs, dest);
   }
 
+  // 2. adapt prose file references so nothing points at filtered files
+  //    (grammar.ebnf is re-hosted below; examples/*.ncoda have .md mirrors)
+  const adaptedGrammar = [];
+  const adaptedExamples = [];
+  const adaptTargets = ['SKILL.md', ...copied.filter((r) => r.startsWith('references/') && r.endsWith('.md')), ...copied.filter((r) => r.startsWith('language-pack/') && r.endsWith('.json'))];
+  for (const rel of adaptTargets) {
+    const dest = join(outDir, rel);
+    if (!existsSync(dest)) continue;
+    let text = await readFile(dest, 'utf8');
+    const orig = text;
+    text = text
+      .replace(/language-pack\/grammar\.ebnf/g, 'references/grammar-ebnf.md')
+      .replace(/(?<![\w/.-])grammar\.ebnf(?![-\w])/g, 'references/grammar-ebnf.md');
+    for (const relMirror of mirrored) {
+      const base = basename(relMirror, '.ncoda');
+      text = text.replaceAll(`examples/${base}.ncoda`, `examples/${base}.md`);
+    }
+    if (text !== orig) {
+      await writeFile(dest, text, 'utf8');
+      if (/grammar\.ebnf/.test(orig)) adaptedGrammar.push(rel);
+      if (/examples\/[\w-]+\.ncoda/.test(orig)) adaptedExamples.push(rel);
+    }
+  }
+
+  // 2.5 re-host grammar.ebnf inside the whitelist as references/grammar-ebnf.md
+  const grammarSrc = join(sourceDir, 'language-pack', 'grammar.ebnf');
+  let grammarRehosted = false;
+  if (existsSync(grammarSrc)) {
+    const raw = await readFile(grammarSrc, 'utf8');
+    const md = [
+      '# grammar.ebnf — NodeCoda Workflow Language (nodecoda/1)',
+      '',
+      '> SkillHub 发布版将源 `language-pack/grammar.ebnf` 重托管为 `.md`（平台白名单',
+      '> 不含 `.ebnf`）。内容与源文件一致，`[feature]` 标签保留，可按特性取切片。',
+      '',
+      '```ebnf',
+      raw.replace(/\n$/, ''),
+      '```',
+      '',
+    ].join('\n');
+    await writeFile(join(outDir, 'references', 'grammar-ebnf.md'), md, 'utf8');
+    grammarRehosted = true;
+  }
+
   // 2. mirror examples/*.ncoda -> examples/<name>.md
   for (const rel of mirrored) {
     const src = await readFile(join(sourceDir, rel), 'utf8');
@@ -171,7 +215,7 @@ async function build() {
       `> 还原方式：将下方代码块内容保存为 \`${base}.ncoda\` 即可。`,
       '',
       `\`\`\`${NCODA_MIRROR_LANG}`,
-      src.replace(/\n$/, ''),
+      src, // keep the original trailing newline for byte-exact restore
       '```',
       '',
     ].join('\n');
@@ -239,14 +283,21 @@ async function build() {
       hashes[rel] = rel.endsWith('.ebnf') ? hashText(raw) : hashJson(JSON.parse(raw.toString('utf8')));
     }
     v.hashes = hashes;
-    // source_hashes: recompute from the copied references
+    // source_hashes: recompute from the copied references; include the
+    // re-hosted grammar (references/grammar-ebnf.md, generated from grammar.ebnf)
     const refsDir = join(outDir, 'references');
     const sourceHashes = {};
-    for (const rel of v.source_docs ?? []) {
+    const sourceDocs = [...(v.source_docs ?? [])];
+    const grammarDoc = 'references/grammar-ebnf.md';
+    if (existsSync(join(refsDir, 'grammar-ebnf.md')) && !sourceDocs.includes(grammarDoc)) {
+      sourceDocs.push(grammarDoc);
+    }
+    for (const rel of sourceDocs) {
       const base = basename(rel);
       const p = join(refsDir, base);
       if (existsSync(p)) sourceHashes[rel] = hashText(await readFile(p));
     }
+    v.source_docs = sourceDocs;
     v.source_hashes = sourceHashes;
     v.generated_at = new Date().toISOString().slice(0, 19) + 'Z';
     v.note = (v.note ? v.note + '; ' : '') +
@@ -255,7 +306,7 @@ async function build() {
   }
 
   await verify(outDir, manifest);
-  await report(copied, mirrored, filtered, outDir);
+  await report(copied, mirrored, filtered, adaptedGrammar, adaptedExamples, outDir);
   if (wantZip) await writeZip(outDir);
 }
 
@@ -286,6 +337,21 @@ async function verify(dir, manifest) {
     }
   }
   if (!existsSync(join(dir, manifest.entry ?? 'SKILL.md'))) errors.push(`manifest entry missing: ${manifest.entry}`);
+  // e. no dangling references to filtered files (grammar.ebnf, examples/*.ncoda)
+  // generated files (grammar-ebnf.md re-host, version.json note) may mention
+  // filtered source names intentionally — exclude them from the dangling scan
+  const scanTargets = ['SKILL.md',
+    ...rels.filter((r) => r.startsWith('references/') && r.endsWith('.md') && r !== 'references/grammar-ebnf.md'),
+    ...rels.filter((r) => r.startsWith('language-pack/') && r.endsWith('.json') && r !== 'language-pack/version.json')];
+  for (const rel of scanTargets) {
+    const text = await readFile(join(dir, rel), 'utf8');
+    if (/grammar\.ebnf/.test(text)) errors.push(`dangling reference to grammar.ebnf in ${rel}`);
+    const ncodaRefs = text.match(/examples\/[\w-]+\.ncoda/g) ?? [];
+    if (ncodaRefs.length) errors.push(`dangling .ncoda example reference in ${rel}: ${ncodaRefs.join(', ')}`);
+  }
+  if (!existsSync(join(dir, 'references', 'grammar-ebnf.md')) && rels.some((r) => r.startsWith('references/') && r.endsWith('.md'))) {
+    errors.push('references/grammar-ebnf.md missing (grammar re-host)');
+  }
   // d. version.json hash consistency
   const vp = join(dir, 'language-pack', 'version.json');
   if (existsSync(vp)) {
@@ -316,12 +382,14 @@ async function verify(dir, manifest) {
 
 // ------------------------------------------------------------ report
 
-async function report(copied, mirrored, filtered, outDir) {
+async function report(copied, mirrored, filtered, adaptedGrammar, adaptedExamples, outDir) {
   console.log(`\n${c.cyan}build-skillhub${c.reset} ${c.bold}${outDir}${c.reset}`);
   console.log(`  copied whitelisted: ${copied.length}`);
   console.log(`  mirrored .ncoda -> .md: ${mirrored.length}`);
   if (filtered.ncoda.length) console.log(`  ${c.yellow}filtered .ncoda${c.reset} (outside examples): ${filtered.ncoda.length}`);
-  if (filtered.ebnf.length) console.log(`  ${c.yellow}filtered .ebnf${c.reset} (grammar, excluded by whitelist): ${filtered.ebnf.length}`);
+  if (filtered.ebnf.length) console.log(`  ${c.yellow}filtered .ebnf${c.reset} (grammar, re-hosted to references/grammar-ebnf.md): ${filtered.ebnf.length}`);
+  if (adaptedGrammar.length) console.log(`  adapted grammar refs: ${adaptedGrammar.length} file(s)`);
+  if (adaptedExamples.length) console.log(`  adapted .ncoda example refs: ${adaptedExamples.length} file(s)`);
   if (filtered.other.length) console.log(`  ${c.yellow}filtered other${c.reset}: ${filtered.other.join(', ')}`);
 }
 

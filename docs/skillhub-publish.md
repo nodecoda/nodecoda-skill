@@ -30,14 +30,20 @@ node scripts/build-skillhub.mjs --keep
 脚本做的事：
 
 1. **白名单拷贝** — 只复制白名单扩展名文件，丢弃 `.ncoda`、`.ebnf`
-2. **示例镜像** — 每个 `examples/*.ncoda` 生成 `examples/<name>.md`（原文包裹在
-   ` ```ncoda ` 代码块中），`examples/README.md` 追加镜像说明与还原指引
-3. **manifest 重写** — `examples` 字段指向镜像 `.md`，附加 `x-skillhub-build`
+2. **grammar 重托管** — `grammar.ebnf`（`.ebnf` 不在白名单）内容原样重托管为
+   `references/grammar-ebnf.md`（` ```ebnf ` 代码块，`[feature]` 标签保留），
+   SKILL.md / references / antipatterns.json 中 5 处引用自动改指
+3. **示例镜像** — 每个 `examples/*.ncoda` 生成 `examples/<name>.md`（原文包裹在
+   ` ```ncoda ` 代码块中，逐字节一致），`examples/README.md` 追加镜像说明与还原指引；
+   `language-reference.md` 等处的示例路径引用同步改为 `.md`
+4. **manifest 重写** — `examples` 字段指向镜像 `.md`，附加 `x-skillhub-build`
    溯源信息（工具名、源 commit、生成时间）
-4. **version.json 重写** — 移除 `grammar.ebnf` 的 hash，其余 hash 按实际文件重算，
-   `source_docs`/`source_hashes` 重新对齐
-5. **自校验** — 白名单纯净、文件数 ≤100、单文件 ≤1MB、总大小 ≤10MB、
-   manifest/version.json 全部引用存在且 hash 匹配
+5. **version.json 重写** — 移除 `grammar.ebnf` 的 hash，其余 hash 按实际文件重算，
+   `source_docs`/`source_hashes` 重新对齐并纳入 `references/grammar-ebnf.md`
+6. **自校验** — 白名单纯净、文件数 ≤100、单文件 ≤1MB、总大小 ≤10MB、
+   manifest/version.json 全部引用存在且 hash 匹配、**无悬空引用**
+   （扫描 SKILL.md/references/language-pack：不得出现 `grammar.ebnf` 或
+   `examples/*.ncoda` 文件路径）
 
 ## 发布
 
@@ -57,7 +63,8 @@ node scripts/build-skillhub.mjs --keep
 
 ## 已知限制
 
-- `references/*.md` 与 `SKILL.md` 中的 `.ncoda` 概念引用（语言身份的一部分）原样
-  保留；只有实际文件缺失，示例内容由 `.md` 镜像与 `examples/README.md` 表格覆盖
-- `grammar.ebnf` 被白名单排除，`references/grammar-reference.md`（.md）承担语法
-  文档职责
+- `SKILL.md` / `references/*.md` 中的 `.ncoda` 概念引用（语言身份的一部分）原样
+  保留；实际文件路径引用已全部适配到包内存在的 `.md` 镜像
+- `examples/README.md` 的镜像说明表格有意保留原始 `.ncoda` 文件名（作为还原指引）
+- 包内对仓库工具（`scripts/*.mjs`、`docs/references-convention.md` 等）的提及为
+  仓库上下文说明，`npx @nodecoda/skill` 命令不依赖包内文件
