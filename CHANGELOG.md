@@ -5,6 +5,23 @@ All notable changes to this distribution repository will be documented in this f
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.29] - 2026-08-15
+
+### Added - SkillHub 一键自动发布(scripts/publish-skillhub.mjs)
+
+按 skillhub.cn 官方 CLI 流程(@astron-team/skillhub)封装的发布管线:
+- **build → auth → publish → report 四步**:先用 build-skillhub.mjs 做白名单清理
+  + store-only zip(自带校验),再 `whoami` 认证检查,然后
+  `publish <zip> --namespace <ns> --visibility <v>`,最后输出技能详情 URL。
+- **CLI 解析**:`SKILLHUB_CLI` env → PATH 上的 `skillhub` → `npx -y @astron-team/skillhub`;
+  token 完全交给 CLI 自己(--token / SKILLHUB_TOKEN / ~/.skillhub/credentials.json),
+  脚本不读不写凭据。
+- **参数**:`--namespace`(必填)/ `--visibility` / `--skill` / `--out` / `--registry` /
+  `--token` / `--cli` / `--dry-run`(只 build+鉴权,不发布)/ `--json`。
+- **退出码镜像官方 CLI**:0 成功 / 1 一般错误 / 2 认证失败 / 5 参数错误。
+- **测试**:test-publish-skillhub 8 项——usage 错误→5、--help→0、auth 失败→2、
+  dry-run 不触发 publish、publish 路径(假 CLI 注入 SKILLHUB_CLI,无网络无凭据)
+  校验 zip/namespace/visibility 透传与 URL/JSON 输出。
 ## [0.2.28] - 2026-08-15
 
 ### Added - save-build 无 key guest 通路(按 id 拉取历史快照不再需要 NODECODA_KEY)

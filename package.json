@@ -1,6 +1,6 @@
 {
   "name": "@nodecoda/skill",
-  "version": "0.2.28",
+  "version": "0.2.29",
   "description": "AI agent skills for NodeCoda — teach coding agents to author .ncoda Source and use the NodeCoda MCP service",
   "license": "Apache-2.0",
   "type": "module",
@@ -26,7 +26,8 @@
     "scripts/mcp-register.mjs",
     "scripts/build-skillhub.mjs",
     "scripts/build.mjs",
-    "scripts/device-id.mjs"
+    "scripts/device-id.mjs",
+    "scripts/publish-skillhub.mjs"
   ],
   "keywords": [
     "nodecoda",
@@ -54,10 +55,10 @@
   "scripts": {
     "lint": "node scripts/validate-skill.mjs && node scripts/validate-language-pack.mjs && node scripts/validate-examples.mjs",
     "validate": "node scripts/validate-skill.mjs && node scripts/validate-language-pack.mjs && node scripts/validate-examples.mjs",
-    "test": "node scripts/test-device-id.mjs && node scripts/test-contract.mjs && node scripts/test-examples.mjs && node scripts/test-mcp-register.mjs && node scripts/test-stdio-framing.mjs && node scripts/test-project.mjs && node scripts/test-http-server.mjs && node scripts/test-save-build.mjs && node scripts/test-language-pack.mjs && node scripts/test-live-mcp.mjs && node scripts/test-build.mjs && bash scripts/test-agent-detect.sh && node scripts/test-package-integrity.mjs",
+    "test": "node scripts/test-device-id.mjs && node scripts/test-contract.mjs && node scripts/test-examples.mjs && node scripts/test-mcp-register.mjs && node scripts/test-stdio-framing.mjs && node scripts/test-project.mjs && node scripts/test-http-server.mjs && node scripts/test-save-build.mjs && node scripts/test-language-pack.mjs && node scripts/test-live-mcp.mjs && node scripts/test-build.mjs && bash scripts/test-agent-detect.sh && node scripts/test-package-integrity.mjs && node scripts/test-publish-skillhub.mjs",
     "test:contract": "node scripts/test-contract.mjs",
     "test:project": "node scripts/test-project.mjs",
-    "test:all": "node scripts/test-device-id.mjs && node scripts/test-contract.mjs && node scripts/test-examples.mjs && node scripts/test-mcp-register.mjs && node scripts/test-stdio-framing.mjs && node scripts/test-project.mjs && node scripts/validate-skill.mjs && node scripts/validate-language-pack.mjs && node scripts/validate-examples.mjs && node scripts/validate-project.mjs examples/project && node scripts/test-http-server.mjs && node scripts/test-save-build.mjs && node scripts/test-language-pack.mjs && node scripts/test-live-mcp.mjs && node scripts/test-build.mjs && bash scripts/test-agent-detect.sh && node scripts/test-package-integrity.mjs",
+    "test:all": "node scripts/test-device-id.mjs && node scripts/test-contract.mjs && node scripts/test-examples.mjs && node scripts/test-mcp-register.mjs && node scripts/test-stdio-framing.mjs && node scripts/test-project.mjs && node scripts/validate-skill.mjs && node scripts/validate-language-pack.mjs && node scripts/validate-examples.mjs && node scripts/validate-project.mjs examples/project && node scripts/test-http-server.mjs && node scripts/test-save-build.mjs && node scripts/test-language-pack.mjs && node scripts/test-live-mcp.mjs && node scripts/test-build.mjs && bash scripts/test-agent-detect.sh && node scripts/test-package-integrity.mjs && node scripts/test-publish-skillhub.mjs",
     "cli": "node scripts/cli.mjs",
     "test:http": "node scripts/test-http-server.mjs",
     "test:live-mcp": "node scripts/test-live-mcp.mjs",
@@ -65,7 +66,8 @@
     "test:agent-detect": "bash scripts/test-agent-detect.sh",
     "test:mcp-register": "node scripts/test-mcp-register.mjs",
     "test:build": "node scripts/test-build.mjs",
-    "test:package": "node scripts/test-package-integrity.mjs"
+    "test:package": "node scripts/test-package-integrity.mjs",
+    "test:skillhub-publish": "node scripts/test-publish-skillhub.mjs"
   },
   "bin": {
     "nodecoda-skill": "scripts/cli.mjs"
