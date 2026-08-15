@@ -2,13 +2,13 @@
 name: nodecoda-workflow
 description: Use when designing, writing, building, diagnosing, or revising NodeCoda Source through the authenticated NodeCoda MCP service.
 slug: nodecoda-workflow
-displayName: NodeCoda Workflow
-version: 0.2.31
+displayName: NodeCoda Dify Workflow
+version: 0.2.32
 summary: Author, validate, and build Dify workflows via NodeCoda MCP.
 license: Apache-2.0
 ---
 
-# NodeCoda Workflow Skill
+# NodeCoda Dify Workflow Skill
 
 把用户的工作流需求写成可版本化的 NodeCoda Source，并通过 Workflow Build 取得经目标校验的 Dify Workflow artifact。
 

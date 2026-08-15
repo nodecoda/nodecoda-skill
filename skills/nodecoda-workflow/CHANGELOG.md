@@ -15,6 +15,9 @@
 - **SkillHub 详情页展示化**（build-skillhub.mjs）：发布包 SKILL.md frontmatter `description` 改为用户向
   中文简介（平台将其放入"中文简介"槽），正文顶部新增「这是什么 / 快速上手 / 环境要求」用户向介绍；
   源 SKILL.md 与 npm 安装路径不变，agent 触发词保留。
+- **改名与品牌**（SKILL.md + build-skillhub.mjs）：展示名 `NodeCoda Workflow` → `NodeCoda Dify Workflow`；
+  发布包用户向介绍新增口号「让 AI Agent 构建你信得过的 Dify 工作流」、官网 https://www.nodecoda.com，
+  快速上手改为「直接导入、无需检测」。
 - `references/mcp-contract.md`：Build 段补 `Idempotency-Key` header 双份要求；Poll 段补 REST 直连
   artifact 需单独 `GET /v1/workflow-builds/{build_id}/artifact`。
 - `references/project-workflow.md`：补同 Source 重建完整状态链
