@@ -15,6 +15,7 @@
 - **SkillHub 详情页展示化**（build-skillhub.mjs）：发布包 SKILL.md frontmatter `description` 改为用户向
   中文简介（平台将其放入"中文简介"槽），正文顶部新增「这是什么 / 快速上手 / 环境要求」用户向介绍；
   源 SKILL.md 与 npm 安装路径不变，agent 触发词保留。
+- **精简展示文案**（build-skillhub.mjs）：删除「开箱即用」段（Node.js 版本、Dify 1.16、免费体验与注册引导）。
 - **展示文案营销化**（build-skillhub.mjs）：发布包用户向介绍改为营销向文案——收益导向（不用自己写
   YAML、几分钟拿成品）、「开箱即用」替代「环境要求」、去掉配额宣传（设备日限 50 次）、新增 GitHub 链接；
   H1 引导段与 frontmatter description 同步改为用户向表述。
