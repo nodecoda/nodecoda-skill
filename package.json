@@ -23,7 +23,8 @@
     "scripts/mcp-core.mjs",
     "scripts/mcp-http-server.mjs",
     "NOTICE",
-    "scripts/mcp-register.mjs"
+    "scripts/mcp-register.mjs",
+    "scripts/build-skillhub.mjs"
   ],
   "keywords": [
     "nodecoda",
