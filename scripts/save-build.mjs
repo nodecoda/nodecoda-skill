@@ -31,9 +31,11 @@
 import { mkdir, writeFile, copyFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
+import { callTool } from './mcp-core.mjs';
 
 const BASE = (process.env.NODECODA_API_BASE || 'http://127.0.0.1:8080').replace(/\/$/, '');
 const KEY = process.env.NODECODA_KEY;
+const useREST = Boolean(KEY);
 
 const args = process.argv.slice(2);
 let buildId = null;
@@ -55,11 +57,6 @@ if (!buildId) {
   console.error('usage: node scripts/save-build.mjs <build_id> [--source <file.ncoda>] [--out <dir>] [--base <url>] [--flat]');
   process.exit(2);
 }
-if (!KEY) {
-  console.error('NODECODA_KEY is not set');
-  process.exit(2);
-}
-
 // Per-build directory by default (builds/<build_id>/), flat with --flat.
 const targetDir = flat ? outDir : path.join(outDir, buildId);
 
@@ -75,10 +72,13 @@ async function get(pathname, raw = false) {
 }
 
 async function main() {
-  const rec = await get(`/v1/workflow-builds/${encodeURIComponent(buildId)}`);
-  const data = rec.data ?? rec;
+  const via = useREST ? 'REST www' : 'guest try /mcp';
+  const raw = useREST
+    ? await get(`/v1/workflow-builds/${encodeURIComponent(buildId)}`)
+    : await callTool('get_workflow_build', { build_id: buildId });
+  const data = raw.data ?? raw;
   const status = data.status;
-  console.log(`build ${buildId}: ${status}`);
+  console.log(`build ${buildId} (${via}): ${status}`);
 
   await mkdir(targetDir, { recursive: true });
 
@@ -102,7 +102,15 @@ async function main() {
   }
 
   const sourceBase = (data.source_filename || buildId).replace(/\.ncoda$/, '');
-  const artifact = await get(`/v1/workflow-builds/${encodeURIComponent(buildId)}/artifact`, true);
+  let artifact;
+  if (useREST) {
+    artifact = await get(`/v1/workflow-builds/${encodeURIComponent(buildId)}/artifact`, true);
+  } else {
+    const a = data.artifact;
+    if (a && typeof a.content === 'string') artifact = a.content;
+    else if (a && typeof a.content_b64 === 'string') artifact = Buffer.from(a.content_b64, 'base64').toString('utf8');
+    else throw new Error(`guest response for ${buildId} has no inline artifact`);
+  }
 
   const artPath = path.join(targetDir, `${sourceBase}.dify.yaml`);
   const recPath = path.join(targetDir, `${sourceBase}.build.json`);

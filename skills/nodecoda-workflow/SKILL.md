@@ -43,7 +43,7 @@ description: Use when designing, writing, building, diagnosing, or revising Node
 
 **恢复**：会话中断后 `npx -y @nodecoda/skill project get-state .` 回到对应阶段，不重问需求。
 
-**产物保存**：日常构建/迭代用 `npx -y @nodecoda/skill build <file.ncoda>`——产物写到**源文件同目录**：`<source-base>.dify.yaml` + `.build.json`，覆盖式、不按 build_id 建目录、无 source 副本，版本由你主动 `git commit` 维护；`save-build <build_id>` 仅用于按 id 拉取历史快照（归档到 `builds/<build_id>/`）。
+**产物保存**：日常构建/迭代用 `npx -y @nodecoda/skill build <file.ncoda>`——产物写到**源文件同目录**：`<source-base>.dify.yaml` + `.build.json`，覆盖式、不按 build_id 建目录、无 source 副本，版本由你主动 `git commit` 维护；`save-build <build_id>` 仅用于按 id 拉取历史快照（归档到 `builds/<build_id>/`，无 key 自动走 guest try /mcp，有 key 走 www REST）。
 
 **轻量模式（可选）**：只验证 `.ncoda` 片段、排查单点时不建项目，但需声明"这是临时验证"。完整规则见 `references/project-workflow.md`。
 
@@ -192,7 +192,8 @@ Source 不超过 64 KiB；artifact 不超过 256 KiB；诊断最多 100 条。
   - `<source-base>.build.json` — build 记录（status、build_id、SHA256、诊断）
   - `design.md` — 需求分析阶段的设计说明（中间产物，推荐保留）
 - 失败时：build CLI 在控制台输出诊断、不落盘；如需留档，用 `save-build <build_id>` 拉取记录（`<build_id>.build.json` 含 diagnostics）。
-- 历史快照（按 build_id 显式归档，`builds/<build_id>/`）：
+- 历史快照（按 build_id 显式归档，`builds/<build_id>/`；**无 `NODECODA_KEY` 也
+  可用**——自动走 guest try /mcp 按 id 拉取，artifact 内联返回）：
 
 ```bash
 npx -y @nodecoda/skill save-build <build_id> --source <name>.ncoda

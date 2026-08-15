@@ -5,6 +5,22 @@ All notable changes to this distribution repository will be documented in this f
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.28] - 2026-08-15
+
+### Added - save-build 无 key guest 通路(按 id 拉取历史快照不再需要 NODECODA_KEY)
+
+消除「MCP 会话内构建完、仅想落盘却必须手动写文件」的摩擦:
+- **传输自动选路**(与 mcp-core upstreamMode 契约一致):有 `NODECODA_KEY` →
+  www REST(现有流程,artifact 走 `/artifact` 端点);无 key → guest JSON-RPC
+  try.nodecoda.com /mcp(或 `NODECODA_MCP_JSONRPC_URL` 覆盖),poll 响应内联
+  artifact,不再二次请求。输出标注传输(guest try /mcp / REST www)。
+- 移除「NODECODA_KEY 未设置即 exit(2)」的硬门;落盘布局不变
+  (`builds/<build_id>/`, `--flat` 平铺;FAILED 仍 record-only 含 diagnostics)。
+- 测试:test-save-build 新增本地 JSON-RPC stub 通路
+  (initialize → notifications/initialized → tools/call SSE 帧),覆盖 guest
+  SUCCEEDED 落盘 + guest FAILED record-only;REST 两条路径保持。
+- 文档:SKILL.md 产物保存/历史快照注明无 key 可用。
+
 ## [0.2.27] - 2026-08-15
 
 ### Changed - 减法:去掉 src/builds 拆分,一个目录管全部(源 + 产物)
