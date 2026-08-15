@@ -25,7 +25,8 @@
     "NOTICE",
     "scripts/mcp-register.mjs",
     "scripts/build-skillhub.mjs",
-    "scripts/build.mjs"
+    "scripts/build.mjs",
+    "scripts/device-id.mjs"
   ],
   "keywords": [
     "nodecoda",
