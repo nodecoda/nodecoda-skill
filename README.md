@@ -178,6 +178,7 @@ cp -R nodecoda-skill/skills/nodecoda-workflow <skill-search-path>/nodecoda-workf
 ### Wiring up MCP
 
 - **Zero-install** — `npx -y @nodecoda/skill mcp` (stdio, or `--http` for Streamable HTTP). No clone, no local install.
+- **CLI builds (no MCP client, no key)** — `npx -y @nodecoda/skill build <file.ncoda>` submits, polls, and saves the Dify artifact in one step. Transport is picked automatically: no `NODECODA_KEY` → guest JSON-RPC on try.nodecoda.com, key set → www REST. Handy right after `add` when the current session can't load the MCP tools yet.
 - **Public endpoint** — `https://www.nodecoda.com/mcp`; the key is read from `NODECODA_KEY` and never written to disk.
 - **Self-host / local dev** — [`.codex/config.example.toml`](https://github.com/nodecoda/nodecoda-skill/blob/main/.codex/config.example.toml) ships templates for a local HTTP server, a local dev stack, and a stdio bridge.
 

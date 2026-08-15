@@ -61,6 +61,118 @@ The same idempotency key is valid only for an exact replay. Any Source, filename
 
 > **Header 要求（实证 2026-08-14）**：公网网关要求幂等 key **同时**出现在 body 的 `idempotency_key` 字段和 `Idempotency-Key` 请求头中；只放 body 直连 REST 会返回 `400 WORKFLOW_BUILD_REQUEST_INVALID`。MCP server 已自动双份转发，REST 直连必须自己带 header。
 
+### Guest wire protocol — complete runnable example (try /mcp, no key)
+
+> 这是 guest 路径的**完整可复现配方**（会话式 JSON-RPC over Streamable HTTP）。
+> 本仓库已把它脚本化：`npx -y @nodecoda/skill build <file.ncoda> --trace` 打印的就是下面
+> 这段交换的实时日志（`initialize` → `notifications/initialized` → `tools/call` →
+> SSE `data:` 帧 → 双重解码 → 轮询）。下面的脚本只依赖 Node 18+ 内建 `fetch`，
+> 可直接复制运行；无需 API key。**注意本段是 try guest；www 生产端（key 路径、
+> 无状态）见 `references/public-service.md`「传输约定（Streamable HTTP，www 生产端）」**。
+
+```js
+// guest-build-recipe.mjs — run with: node guest-build-recipe.mjs <source.ncoda>
+// Node 18+ (global fetch). No key, no MCP client, no repo dependency.
+import { readFile } from 'node:fs/promises';
+
+const URL   = process.env.NODECODA_MCP_JSONRPC_URL || 'https://try.nodecoda.com/mcp';
+const DEVICE = process.env.NODECODA_DEVICE_ID || 'custom-device-0001'; // stable per install
+const TARGET = 'dify-1.16-graphon-0.6';
+
+function headers(sessionId) {
+  return {
+    'Content-Type': 'application/json',
+    // Guest placeholder key: try's /mcp admits it as a guest build; its /v1
+    // REST surface (and www's) strictly rejects it with 401 INVALID_API_KEY.
+    Authorization: 'Bearer sk-try-placeholder',
+    'X-NodeCoda-Device-Id': DEVICE,
+    'X-NodeCoda-Client': 'guest-recipe/0.1',
+    ...(sessionId ? { 'Mcp-Session-Id': sessionId } : {}), // MUST echo on later requests
+  };
+}
+
+// POST a JSON-RPC message; return parsed messages from SSE `data:` frames
+// (tolerates plain application/json responses too).
+async function post(body, sessionId) {
+  const res = await fetch(URL, { method: 'POST', headers: headers(sessionId), body: JSON.stringify(body) });
+  const raw = await res.text();
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${raw.slice(0, 300)}`);
+  const msgs = raw.split('\n')
+    .filter((l) => l.startsWith('data: ') && l !== 'data: [DONE]')
+    .map((l) => JSON.parse(l.slice(6)));
+  if (msgs.length === 0) { try { msgs.push(JSON.parse(raw)); } catch { /* keep-alive */ } }
+  return msgs;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const unwrap = (payload) => (payload && typeof payload === 'object' && payload.data !== undefined ? payload.data : payload);
+const terminal = new Set(['SUCCEEDED', 'FAILED', 'CANCELLED']);
+
+async function main() {
+  const file = process.argv[2];
+  if (!file) throw new Error('usage: node guest-build-recipe.mjs <source.ncoda>');
+  const source = await readFile(file, 'utf8');
+
+  // 1) initialize — capture the Mcp-Session-Id RESPONSE header
+  const initRes = await fetch(URL, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize',
+      params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'guest-recipe', version: '0.1' } } }),
+  });
+  if (!initRes.ok) throw new Error(`initialize HTTP ${initRes.status}`);
+  const sessionId = initRes.headers.get('mcp-session-id');
+  if (!sessionId) throw new Error('no Mcp-Session-Id returned — guest admission only on /mcp');
+  console.log('session:', sessionId);
+
+  // 2) notifications/initialized (fire-and-forget; server expects it)
+  await post({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} }, sessionId);
+
+  // 3) tools/call build_dify_workflow — response is SSE data: frames
+  const idemKey = `${file.replace(/\.ncoda$/, '')}-${Date.now()}`;
+  const [admissionMsg] = await post({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: {
+    name: 'build_dify_workflow',
+    arguments: { source, source_filename: file.split('/').pop(), language_identity: 'nodecoda/1',
+      target_profile: TARGET, idempotency_key: idemKey },
+  } }, sessionId);
+  if (admissionMsg.error) throw new Error(`gateway error: ${JSON.stringify(admissionMsg.error)}`);
+  // 4) tool result is DOUBLE-ENCODED: result.content[0].text holds the payload string
+  const admission = unwrap(JSON.parse(admissionMsg.result.content[0].text));
+  console.log('admission:', JSON.stringify(admission));
+  if (admission.status === 'throttled' || admission.status === 'exhausted') return; // see statuses table above
+
+  // 5) poll until terminal — try returns LOWERCASE statuses (queued/building/succeeded);
+  //    normalize to the documented uppercase contract. Artifact is inline on success.
+  const pollInterval = Math.max(Number(admission.poll_after_ms) || 1000, 500);
+  for (;;) {
+    await sleep(pollInterval);
+    const [msg] = await post({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: {
+      name: 'get_workflow_build', arguments: { build_id: admission.build_id },
+    } }, sessionId);
+    const rec = unwrap(JSON.parse(msg.result.content[0].text));
+    const status = (rec.status ?? '').toUpperCase();
+    console.log('poll:', status);
+    if (terminal.has(status)) {
+      if (status === 'SUCCEEDED') console.log('artifact:', rec.artifact?.content ?? '(inline content present)');
+      process.exit(status === 'SUCCEEDED' ? 0 : 2);
+    }
+  }
+}
+
+main().catch((e) => { console.error(e.message); process.exit(1); });
+```
+
+要点（与 `scripts/mcp-core.mjs` 的 `JsonRpcUpstream` 完全对应）：
+
+1. **会话头**：`initialize` 的响应头 `Mcp-Session-Id` 必须在后续每个请求回显；
+2. **SSE 解析**：POST 响应是 `data: <jsonrpc>` 帧（也可能直接 `application/json`，两种都容错）；
+3. **双重编码**：工具结果在 `result.content[0].text` 里是**字符串化的 JSON**，先 parse 外层 JSON-RPC 再 parse 内层 payload；
+4. **guest 占位 key** `sk-try-placeholder` + 设备头 `X-NodeCoda-Device-Id`（服务端只存 sha256）；
+5. **状态归一化**：try 返回小写（`succeeded`），客户端按文档契约转大写；admission 的 `queued/throttled/exhausted` 保持小写；
+6. **artifact 内联**：SUCCEEDED 的 poll 响应直接带 `artifact.content`（无需 `/artifact` 端点）。
+
+`npx -y @nodecoda/skill build <file.ncoda> --trace` 内部就是这个流程，并把每一步真实交换打印到 stderr——以后不需要再逆向源码。
+
 ## Poll
 
 Call `get_workflow_build`:

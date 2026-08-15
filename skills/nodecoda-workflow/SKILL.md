@@ -19,7 +19,7 @@ description: Use when designing, writing, building, diagnosing, or revising Node
 1. 在用户项目目录执行 `npx -y @nodecoda/skill add nodecoda-workflow`（自动探测 Codex / Claude Code / Gemini CLI / Cursor 并落位，**并自动注册 `nodecoda` MCP server**——装完 agent 直接拥有 `build_dify_workflow` 等三个工具，无需手动接线）；
 2. 提醒用户**重启 agent 会话**让 skill 与 MCP server 生效，然后让用户重新发起原请求；
 3. 若工具仍缺失（MCP 未接上），用 `npx -y @nodecoda/skill mcp-register <target>` 修复，或按 `docs/installation.md` / `.codex/config.example.toml` 手动接线；
-4. **不要假装已具备能力**：工具缺失时报告安装指引，而不是绕过 MCP 猜测行为。
+4. **不要假装已具备能力**：工具缺失时报告安装指引，而不是绕过 MCP 猜测行为；此时可立即改用 `npx -y @nodecoda/skill build <file.ncoda>` 完成构建（无需 MCP 客户端、无需 key），不必等重启。
 
 ## 核心边界
 
@@ -59,7 +59,15 @@ NodeCoda Key 只存在于 MCP 客户端配置中。不要要求、读取、打�
 - `get_workflow_build`
 - `cancel_workflow_build`
 
-> **MCP 不可用时的回退**：若 MCP 工具未注册或持续返回 `AUTH_REQUIRED` / `INVALID_TOKEN`（说明网关为 www 严格准入且未配置 key），不要伪造工具结果，也不要把凭据写进配置；直接走「公共部署 · REST 直连回退」，凭据只从环境读取。未配置 key 时默认已走 try 免费体验，无需回退。
+> **MCP 不可用时的回退**：若 MCP 工具未注册（例如会话内刚 `add`、未重启），或持续返回 `AUTH_REQUIRED` / `INVALID_TOKEN`，不要伪造工具结果，也不要把凭据写进配置。按顺序尝试：
+
+> 1. **CLI 直连构建（最省事，无需 MCP 客户端、无需 key）** — `npx -y @nodecoda/skill build <file.ncoda>`：
+>    自动选路（无 `NODECODA_KEY` → try.nodecoda.com guest JSON-RPC；有 `NODECODA_KEY` → www REST），
+>    提交 → 轮询到终态 → SUCCEEDED 自动把 Dify Workflow artifact + build 记录 + source 副本
+>    落盘到 `./builds/<build_id>/`。其余 flag：`--target` / `--idempotency-key` / `--out` /
+>    `--no-save` / `--timeout-ms` / `--dry-run` / `--json`。
+> 2. 有 key 时走「公共部署 · REST 直连回退」curl 配方（见下），凭据只从环境读取。
+> 3. 工具缺失但必须走 MCP 时，报告安装指引并提醒重启会话，不要假装已具备能力。
 ## 工作流程
 
 ```text

@@ -161,6 +161,7 @@ cp -R nodecoda-skill/skills/nodecoda-workflow <skill-search-path>/nodecoda-workf
 ### 接入 MCP
 
 - **零安装** — `npx -y @nodecoda/skill mcp`（stdio，`--http` 可切 Streamable HTTP）。不用 clone、不用本地安装
+- **CLI 直连构建（无需 MCP 客户端、无需 key）** — `npx -y @nodecoda/skill build <file.ncoda>` 一步完成提交→轮询→落盘 Dify artifact。自动选路：无 `NODECODA_KEY` → try.nodecoda.com guest JSON-RPC，有 key → www REST。`add` 之后当前会话还没法用 MCP 工具时，这是最快的开工路径
 - **公网直连** — `https://www.nodecoda.com/mcp`；Key 从 `NODECODA_KEY` 读取，绝不落盘
 - **自托管 / 本地开发** — [`.codex/config.example.toml`](https://github.com/nodecoda/nodecoda-skill/blob/main/.codex/config.example.toml) 自带三种模板：本地 HTTP server、本地 dev stack、stdio bridge
 

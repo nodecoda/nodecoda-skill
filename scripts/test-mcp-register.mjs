@@ -200,6 +200,16 @@ assert(reg.ok === true, 'registerMcp: cursor project -> ok');
 reg = await registerMcp({ platform: 'unknown', scope: 'home', projectDir: T.proj, homeDir: T.home });
 assert(reg.ok === true && reg.lines[0].includes('skipped'), 'registerMcp: unknown platform -> skipped (never fails install)');
 
+// exists branch: second register on the same target must hint at the build CLI
+{
+  const dupDir = join(tmp, 'dup-proj');
+  await mkdir(dupDir, { recursive: true });
+  await registerMcp({ platform: 'codex', scope: 'project', projectDir: dupDir, homeDir: T.home });
+  const dup = await registerMcp({ platform: 'codex', scope: 'project', projectDir: dupDir, homeDir: T.home });
+  assert(dup.ok === true && dup.lines[0].includes('already registered'), 'registerMcp: second call -> exists');
+  assert(dup.lines[0].includes("npx -y @nodecoda/skill build <file.ncoda>"), 'registerMcp: exists line hints at build CLI for no-key users');
+}
+
 // --- cleanup ----------------------------------------------------------------
 await rm(tmp, { recursive: true, force: true });
 console.log(`\n${fail === 0 ? 'OK' : 'FAIL'}   ${pass} passed, ${fail} failed`);

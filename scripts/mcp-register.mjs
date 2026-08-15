@@ -253,7 +253,7 @@ export async function registerMcp({
   const lines = results.map(({ target, r }) => {
     switch (r.status) {
       case 'added': return `${target}: ✓ MCP server '${MCP_SERVER.name}' registered (npx zero-install)`;
-      case 'exists': return `${target}: MCP server '${MCP_SERVER.name}' already registered (skipped)`;
+      case 'exists': return `${target}: MCP server '${MCP_SERVER.name}' already registered (skipped) — restart your agent to load it; no key? 'npx -y @nodecoda/skill build <file.ncoda>' works right now without MCP`;
       case 'skipped-cli-missing':
       case 'failed':
         return `${target}: ⚠ could not auto-register MCP (${r.reason}). Manual: claude mcp add ${MCP_SERVER.name} --scope ${scope === 'home' ? 'user' : 'project'} -- ${MCP_SERVER.command} ${MCP_SERVER.args.join(' ')}`;

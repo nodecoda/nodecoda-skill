@@ -180,9 +180,30 @@ function normalizePollStatus(payload) {
   return payload;
 }
 
-class JsonRpcUpstream {
-  constructor(url) {
+// Wire-level trace sink for the guest JSON-RPC transport. Gated on
+// NODECODA_MCP_TRACE=1 so any consumer of mcp-core (MCP servers, the `build`
+// CLI) can print the exact request/response exchange with zero code changes —
+// this is the reproducible "guest recipe" the docs reference. Callers may pass
+// their own `trace` fn (e.g. the build CLI's --trace flag).
+function envTraceOn(env = process.env) {
+  return env.NODECODA_MCP_TRACE === '1' || env.NODECODA_MCP_TRACE === 'true';
+}
+function defaultTrace(line) {
+  if (envTraceOn()) process.stderr.write(`[mcp-trace] ${line}\n`);
+}
+// Never leak a real API key into trace output; the guest placeholder is public.
+function redactHeaders(headers) {
+  const out = { ...headers };
+  if (out.Authorization && out.Authorization !== `Bearer ${GUEST_PLACEHOLDER_KEY}`) {
+    out.Authorization = 'Bearer <redacted>';
+  }
+  return out;
+}
+
+export class JsonRpcUpstream {
+  constructor(url, { trace = defaultTrace } = {}) {
     this.url = url;
+    this.trace = trace;
     this.session = null;
     this._sessionReady = null;
   }
@@ -194,8 +215,11 @@ class JsonRpcUpstream {
         params: { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: 'nodecoda-skill', version: clientVersion() } },
       };
       const res = await fetch(this.url, { method: 'POST', headers: this._headers(), body: JSON.stringify(body) });
-      if (!res.ok) throw new HttpError(res.status, await res.text(), Object.fromEntries(res.headers));
+      const raw = await res.text();
+      if (!res.ok) throw new HttpError(res.status, raw, Object.fromEntries(res.headers));
       this.session = res.headers.get('mcp-session-id');
+      this.trace(`>>> POST ${this.url}\n    headers=${JSON.stringify(redactHeaders(this._headers()))}\n    body=${JSON.stringify(body)}`);
+      this.trace(`<<< HTTP ${res.status}  mcp-session-id=${this.session ?? '(none)'}  body=${raw.slice(0, 300)}`);
       await this._post({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} });
       return this.session;
     })();
@@ -211,9 +235,11 @@ class JsonRpcUpstream {
     };
   }
   async _post(body) {
+    this.trace(`>>> POST ${this.url}\n    headers=${JSON.stringify(redactHeaders(this._headers()))}\n    body=${JSON.stringify(body)}`);
     const res = await fetch(this.url, { method: 'POST', headers: this._headers(), body: JSON.stringify(body) });
     const raw = await res.text();
     if (!res.ok) throw new HttpError(res.status, raw, Object.fromEntries(res.headers));
+    this.trace(`<<< HTTP ${res.status}\n    ${raw.slice(0, 1200)}${raw.length > 1200 ? '\n    …(truncated)' : ''}`);
     const msgs = [];
     for (const line of raw.split('\n')) {
       if (line.startsWith('data: ') && line !== 'data: [DONE]') {
@@ -236,6 +262,7 @@ class JsonRpcUpstream {
     if (typeof text === 'string') {
       try { return JSON.parse(text); } catch { return { content: text }; }
     }
+    this.trace(`>>> tools/call ${name} parsed=${JSON.stringify(last.result ?? {})?.slice(0, 600)}`);
     return last.result ?? {};
   }
 }
@@ -290,9 +317,10 @@ const upstream = MODE === 'jsonrpc' ? new JsonRpcUpstream(resolveJsonRpcUrl()) :
 const TOOL_HANDLERS = {
   // Per references/mcp-contract.md: same idempotency_key in the body AND the
   // Idempotency-Key header. We forward both for safety (REST mode).
-  build_dify_workflow: async (args, token) => {
+  build_dify_workflow: async (args, token, up) => {
+    const u = up ?? upstream;
     return submitWithThrottleRetry(async () => {
-      if (upstream) return upstream.call('build_dify_workflow', args);
+      if (u) return unwrap(await u.call('build_dify_workflow', args));
       const data = await apiFetch('/workflow-builds', {
         method: 'POST',
         body: args,
@@ -302,11 +330,14 @@ const TOOL_HANDLERS = {
       return unwrap(data);
     });
   },
-  get_workflow_build: async (args, token) => {
-    if (upstream) {
+  get_workflow_build: async (args, token, up) => {
+    const u = up ?? upstream;
+    if (u) {
       // try /mcp returns the artifact content inline and lowercase statuses;
-      // normalize poll statuses to the documented uppercase contract.
-      return normalizePollStatus(await upstream.call('get_workflow_build', args));
+      // normalize poll statuses to the documented uppercase contract. unwrap
+      // first so both payload shapes (bare data, or {code,data} envelope)
+      // land on the same documented contract.
+      return normalizePollStatus(unwrap(await u.call('get_workflow_build', args)));
     }
     const data = await apiFetch(`/workflow-builds/${encodeURIComponent(args.build_id)}`, { method: 'GET', token });
     const b = unwrap(data);
@@ -329,12 +360,58 @@ const TOOL_HANDLERS = {
     }
     return b ?? data;
   },
-  cancel_workflow_build: async (args, token) => {
-    if (upstream) return upstream.call('cancel_workflow_build', args);
+  cancel_workflow_build: async (args, token, up) => {
+    const u = up ?? upstream;
+    if (u) return unwrap(await u.call('cancel_workflow_build', args));
     const data = await apiFetch(`/workflow-builds/${encodeURIComponent(args.build_id)}`, { method: 'DELETE', token });
     return unwrap(data);
   },
 };
+
+/**
+ * Headless tool-call surface (used by the `build` CLI, scripts/build.mjs).
+ * Dispatches through the same TOOL_HANDLERS as the MCP servers, so transport
+ * selection (guest JSON-RPC vs key REST), throttle retry, poll-status
+ * normalization, and artifact inlining behave identically everywhere. No MCP
+ * client required — this is the zero-wiring path for no-key guest builds.
+ * @param {string} name one of TOOLS[].name (build_dify_workflow / get_workflow_build / cancel_workflow_build)
+ * @param {object} args tool arguments per that tool's inputSchema
+ * @param {{ token?: string }} [opts] upstream bearer token override (defaults to NODECODA_KEY env)
+ */
+export async function callTool(name, args, { token } = {}) {
+  const handler = TOOL_HANDLERS[name];
+  if (!handler) throw new Error(`Unknown tool: ${name}`);
+  return handler(args, token, undefined);
+}
+
+/**
+ * Build a tool-caller bound to a fresh JSON-RPC upstream with wire tracing —
+ * the scripted guest recipe. Use `NODECODA_MCP_TRACE=1` (or pass `trace`) to
+ * print the exact initialize -> notifications/initialized -> tools/call
+ * exchange (headers, SSE frames, parsed result) to stderr, so the protocol
+ * never has to be reverse-engineered again. REST mode (key set) has no
+ * JSON-RPC wire; callers get one note and the normal REST handlers.
+ * @param {{ trace?: (line: string) => void }} [opts]
+ */
+export function createToolCaller({ trace } = {}) {
+  const sink = trace ?? defaultTrace;
+  const tracing = Boolean(trace) || envTraceOn();
+  const mode = upstreamMode();
+  if (mode === 'jsonrpc') {
+    const up = new JsonRpcUpstream(resolveJsonRpcUrl(), { trace: sink });
+    return async (name, args, opts = {}) => {
+      const handler = TOOL_HANDLERS[name];
+      if (!handler) throw new Error(`Unknown tool: ${name}`);
+      return handler(args, opts.token, up);
+    };
+  }
+  return async (name, args, opts = {}) => {
+    const handler = TOOL_HANDLERS[name];
+    if (!handler) throw new Error(`Unknown tool: ${name}`);
+    if (tracing) sink('transport=rest (no JSON-RPC wire; see references/public-service.md curl recipe)');
+    return handler(args, opts.token, null);
+  };
+}
 
 function makeResult(id, result) {
   return { jsonrpc: '2.0', id, result };

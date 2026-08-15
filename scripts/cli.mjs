@@ -22,6 +22,10 @@
 //                                             set-state/resolve/validate-transition)
 //   nodecoda-skill save-build <build_id>     Save a build record + artifact locally
 //   nodecoda-skill live-mcp                  End-to-end build smoke (--dry-run)
+//   nodecoda-skill build <file.ncoda>         Build from CLI — no MCP client / no key
+//                                             (guest JSON-RPC try /mcp, or www REST
+//                                             when NODECODA_KEY is set); submit, poll,
+//                                             and save the artifact in one step
 //   nodecoda-skill help                       Show this help
 //
 // Since v0.2.10, `install`/`add` also auto-registers the `nodecoda` MCP server
@@ -364,6 +368,8 @@ function help() {
     `  nodecoda-skill project <cmd> [args]      Project Mode: init/get-state/set-state/resolve/validate-transition`,
     `  nodecoda-skill save-build <build_id>     Save a build record + artifact locally`,
     `  nodecoda-skill live-mcp                  End-to-end build smoke against the public deployment`,
+    `  nodecoda-skill build <file.ncoda>        Build from CLI: no MCP client / no key needed,`,
+    `                                        submit->poll->save artifact in one step`,
     `  nodecoda-skill mcp --http [--port N]       Serve MCP Streamable HTTP instead`,
     `  nodecoda-skill mcp-register [target]       (Re)register MCP server (repair/upgrade)`,
     `  nodecoda-skill --version                  Print CLI version`,
@@ -413,6 +419,8 @@ try {
       code = runScript('save-build.mjs', rest); break;
     case 'live-mcp':
       code = runScript('live-mcp.mjs', rest); break;
+    case 'build':
+      code = runScript('build.mjs', rest); break;
     case '--version':
     case '-v':
       console.log(PKG_VERSION);

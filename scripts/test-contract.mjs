@@ -23,6 +23,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { parseFrame } from './mcp-stdio-server.mjs';
+import { JsonRpcUpstream, createToolCaller } from './mcp-core.mjs';
 import { validateProjectDir } from './validate-project.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -188,6 +189,62 @@ async function checkDistributionCompleteness() {
   else bad('tarball key content', `missing from files: ${missingReq.join(', ')}`);
 }
 
+// JsonRpcUpstream guest wire trace (stubbed fetch, no network): initialize
+// -> Mcp-Session-Id -> tools/call SSE data: frame -> double-decode, with the
+// trace sink capturing headers/frames/parsed result (the scripted guest recipe).
+async function smokeJsonRpcTrace() {
+  const realFetch = globalThis.fetch;
+  const traceLines = [];
+  const calls = [];
+  globalThis.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    calls.push({ url: String(url), method: opts.method, body });
+    const sessionId = body.method === 'initialize' ? 'sess-trace-1' : null;
+    const headers = { get: (h) => (String(h).toLowerCase() === 'mcp-session-id' ? sessionId : null) };
+    let text = '';
+    if (body.method === 'initialize') {
+      text = '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26","capabilities":{},"serverInfo":{"name":"stub"}}}';
+    } else if (body.method === 'notifications/initialized') {
+      text = '';
+    } else {
+      const inner = JSON.stringify({ build_id: 'tb1', status: 'queued', poll_after_ms: 500 }); // try /mcp inner payload is bare data
+      text = `event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: 2, result: { content: [{ type: 'text', text: inner }] } })}\n`;
+    }
+    return { ok: true, status: 200, headers, text: async () => text };
+  };
+  try {
+    const up = new JsonRpcUpstream('https://stub/mcp', { trace: (l) => traceLines.push(l) });
+    const out = await up.call('build_dify_workflow', { build_id: 'tb1' });
+    if (out.build_id === 'tb1' && out.status === 'queued') ok('JsonRpcUpstream: SSE parse + double-decode');
+    else bad('JsonRpcUpstream: SSE parse + double-decode', JSON.stringify(out));
+
+    const methods = calls.map((c) => c.body.method);
+    if (methods.length === 3 && methods[0] === 'initialize' && methods[1] === 'notifications/initialized' && methods[2] === 'tools/call') ok('JsonRpcUpstream: initialize -> initialized -> tools/call');
+    else bad('JsonRpcUpstream: initialize -> initialized -> tools/call', JSON.stringify(methods));
+
+    const tr = traceLines.join('\n');
+    if (tr.includes('mcp-session-id=sess-trace-1') && tr.includes('tools/call') && tr.includes('<<< HTTP 200') && tr.includes('Bearer sk-try-placeholder')) ok('JsonRpcUpstream: trace shows session header + frames + guest placeholder key');
+    else bad('JsonRpcUpstream: trace shows session header + frames + guest placeholder key', traceLines.join(' | '));
+
+    // createToolCaller({ trace }) binds a fresh upstream with the same sink
+    traceLines.length = 0; calls.length = 0;
+    const saved = { ...process.env };
+    delete process.env.NODECODA_KEY; delete process.env.NODECODA_MCP_JSONRPC_URL;
+    process.env.NODECODA_MCP_TRANSPORT = 'jsonrpc';
+    try {
+      const caller = createToolCaller({ trace: (l) => traceLines.push(l) });
+      const res = await caller('build_dify_workflow', { idempotency_key: 'k1' });
+      if (res.build_id === 'tb1' && traceLines.some((l) => l.includes('>>> POST'))) ok('createToolCaller: trace-enabled guest caller works');
+      else bad('createToolCaller: trace-enabled guest caller works', JSON.stringify({ res, trace: traceLines.slice(0, 3) }));
+    } finally {
+      for (const k of Object.keys(process.env)) { if (!(k in saved)) delete process.env[k]; }
+      Object.assign(process.env, saved);
+    }
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
 // ---- main ----
 console.log('contract tests');
 if (!runValidator()) { console.log(`\nFAIL  ${fail} failed, ${pass} passed`); process.exit(1); }
@@ -202,6 +259,7 @@ await smokeCliMcpNewlineFallback();
 await smokeCliMcpMixedFraming();
 await smokeCliInstall();
 await smokeCliProject();
+await smokeJsonRpcTrace();
 // Project-mode contract: validate examples/project/ once it exists
 {
   const exampleProject = join(REPO_ROOT, 'examples', 'project');

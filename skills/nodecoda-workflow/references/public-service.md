@@ -57,13 +57,19 @@ location /mcp {
 }
 ```
 
-### 传输约定（Streamable HTTP）
+### 传输约定（Streamable HTTP，www 生产端）
 
 - `POST /mcp`：JSON-RPC 2.0 请求，响应 `application/json`；无状态 server，不签发 `Mcp-Session-Id`。notification 返回 `202` 空响应。
 - `GET /mcp`（`Accept: text/event-stream`）：SSE 通道，仅心跳（15s keep-alive）；server 无会话，不做 server push。
 - `OPTIONS /mcp`：CORS 预检（`Access-Control-Allow-Origin: *`）。
 - `DELETE /mcp`：`405`（无状态 server，无会话可终止）。
 - 认证：客户端 `Authorization: Bearer <sk-...>` 原样透传给上游 Workspace REST；缺失且未设 `NODECODA_KEY` 时返回 `401` JSON-RPC error（`-32001`）。
+
+> ⚠️ **本节只描述 www.nodecoda.com 生产端 `/mcp`（key 路径，无状态）**。try.nodecoda.com
+> 的 guest `/mcp` 是**另一套**传输：会话式（`Mcp-Session-Id` + SSE `data:` 帧、工具结果
+> 双重编码、占位 key），两处不要混读。完整的 guest 可复现配方见
+> `references/mcp-contract.md`「Guest wire protocol — complete runnable example」，
+> 或直接跑 `npx -y @nodecoda/skill build <file.ncoda> --trace` 看真实线上交换。
 
 ### 客户端配置（Codex）
 

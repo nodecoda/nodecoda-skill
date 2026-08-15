@@ -5,6 +5,49 @@ All notable changes to this distribution repository will be documented in this f
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.24] - 2026-08-15
+
+### Added - `nodecoda-skill build <file>` CLI 直连构建（打通无 MCP / 无 key 的 guest 路径）
+
+- **场景**：会话内 `add` 后 MCP 工具不可用、或无 API key 的用户此前只能手搓 JSON-RPC——
+  现在 `npx -y @nodecoda/skill build <file.ncoda>` 一行命令完成提交 → 轮询 → 落盘。
+- **选路**：复用 `mcp-core.upstreamMode` 产品契约——无 `NODECODA_KEY` 自动走
+  try.nodecoda.com/mcp guest JSON-RPC（会话式 + SSE + throttle 重试 + poll 状态归一化），
+  有 `NODECODA_KEY` 走 www.nodecoda.com/v1 REST。`mcp-core` 新增 `callTool()` 导出，
+  与 MCP server 共用同一套 TOOL_HANDLERS，行为处处一致。
+- **输出**：SUCCEEDED 后落盘 `builds/<build_id>/<source-base>.dify.yaml` +
+  `<source-base>.build.json` + source 副本（布局与 `save-build` 一致）；
+  `--no-save` 只打印结果，`--json` 输出机器可读结果，`--dry-run` 只验选路不提交。
+- **幂等 key**：默认按 `<source-base>-<sha256(source)[:16]>` 派生，同源码幂等、改源码即换。
+- **测试**：新增 `scripts/test-build.mjs`（15 项：参数解析 / 幂等 key / 选路契约 /
+  注入式端到端流程，覆盖 SUCCEEDED / FAILED / exhausted / throttled / timeout /
+  dry-run / 无 artifact / 缺失源文件），接入 `npm test` 与 `test:all`。
+- **文档**：SKILL.md「MCP 不可用时的回退」改为三步（build CLI → REST curl → 报告重启），
+  自举第 4 条指向 build CLI；README 中英「接入 MCP」新增 CLI 直连构建条目。
+
+### Added - guest 配方脚本化 + 传输文档归属标注 + add 后引导（摩擦修复 2/3/4）
+
+- **wire trace（配方脚本化）**：`mcp-core.JsonRpcUpstream` 支持 `trace` 回调，新增
+  `createToolCaller({ trace })` 导出；`NODECODA_MCP_TRACE=1` 让任何 mcp-core 消费者
+  （MCP server / CLI）零改动打印完整 JSON-RPC 交换（headers + SSE `data:` 帧 +
+  解析结果），真实 key 自动脱敏为 `<redacted>`。`build --trace` 把实时线上交换打到 stderr，
+  与 `--json` 可同时用（stdout 保持机器可读）。
+- **文档（完整可复现配方）**：`references/mcp-contract.md` 新增
+  「Guest wire protocol — complete runnable example」——仅依赖 Node 18+ `fetch` 的
+  独立脚本：initialize 取会话头 → notifications/initialized → tools/call → SSE 帧解析 →
+  双重解码 → 轮询到终态 → artifact 内联读取，并逐条对应 `JsonRpcUpstream` 实现。
+- **文档（部署归属）**：`references/public-service.md`「传输约定」标题标注
+  （Streamable HTTP，www 生产端），并在认证条目后加交叉引用，明确 www 无状态 key 路径
+  与 try 会话式 guest 路径是两套传输，不再混读。
+- **add 后引导**：`mcp-register` 的 `exists` 分支提示追加
+  "restart your agent to load it; no key? 'npx -y @nodecoda/skill build <file.ncoda>'
+  works right now without MCP"。
+- **健壮性**：JSON-RPC 工具分支统一 `unwrap`（与 REST 分支一致），内层 payload 无论
+  裸 data 还是 `{code,data}` 信封都落到同一文档契约。
+- **测试**：test-contract 新增 JsonRpcUpstream 线级 trace 测试（stub fetch 无网络：
+  initialize→会话头→SSE 双重解码、trace 完整性、`createToolCaller` 绑定）；
+  test-mcp-register 新增 exists 提示断言；test-build 新增 `--trace` 解析/usage 断言。
+
 ## [0.2.23] - 2026-08-15
 
 ### Fixed - key 优先于 guest 配置（产品契约：无 key=try 免费，有 key=www 正式）
