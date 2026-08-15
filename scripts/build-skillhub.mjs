@@ -213,37 +213,45 @@ async function build() {
     if (fm) {
       const block = fm[1]
         .replace(/^description:.*$/m,
-          'description: 把工作流需求写成可版本化的 NodeCoda Source,一键构建经目标平台校验的 Dify Workflow(编写、校验、构建 Dify 工作流)。')
+          'description: 让 AI Agent 把工作流需求变成可直接运行的 Dify 工作流:你描述想法,它负责编写、构建与校验。')
         .replace(/^summary:.*$/m,
           'summary: Author, validate, and build Dify workflows via NodeCoda MCP.');
       md = md.replace(fm[0], `---\n${block}\n---`);
     }
+    // 源 H1 引导段是技术向表述,换成用户向一句话
+    md = md.replace(
+      '把用户的工作流需求写成可版本化的 NodeCoda Source，并通过 Workflow Build 取得经目标校验的 Dify Workflow artifact。',
+      '把「想要的工作流」变成「能直接用的 Dify 工作流」:你说需求,Agent 来构建。'
+    );
     const intro = [
       '',
       '## 这是什么',
       '',
       '**让 AI Agent 构建你信得过的 Dify 工作流。**',
       '',
-      '一个把「工作流需求」变成「可直接运行的 Dify Workflow」的技能:你描述需求,它写出可版本化的',
-      'NodeCoda Source,再调用 NodeCoda 构建服务生成经目标平台校验的 Dify Workflow 产物(`*.dify.yaml`)。',
+      '一个帮你把「工作流想法」变成「真正能跑的 Dify 工作流」的技能:你只要说清楚想要什么,',
+      '编写、构建、校验都由 AI Agent 完成——不用自己写 YAML、不用折腾构建环境,',
+      '最后把可以直接导入 Dify 的工作流文件交给你。',
       '',
       '官网:<https://www.nodecoda.com>',
       '',
+      'GitHub:<https://github.com/nodecoda/nodecoda-skill>',
+      '',
       '## 快速上手',
       '',
-      '1. **安装**:项目目录执行 `npx -y @nodecoda/skill add nodecoda-workflow` 即可真正导入、无需检测,',
-      '   自动接入 Codex / Claude Code / Gemini CLI / Cursor 并注册 `nodecoda` MCP server,重启会话后即可使用;',
-      '2. **使用**:直接描述工作流需求(用途 / 输入输出 / 依赖 / 边界),Agent 会写 Source、构建并交付产物;',
-      '3. **免 Agent 直连**:`npx -y @nodecoda/skill build <file.ncoda>` 无需登录、无需 key,产物落在源码同目录。',
+      '1. **安装**:在项目目录执行 `npx -y @nodecoda/skill add nodecoda-workflow`,支持 Codex /',
+      '   Claude Code / Gemini CLI / Cursor,装完重启会话即可使用;',
+      '2. **使用**:直接告诉 AI 你想要的工作流(输入、输出、依赖、边界),几分钟后拿到能直接用的成品;',
+      '3. **不用 AI 也可以**:命令行 `npx -y @nodecoda/skill build <file.ncoda>` 直接构建,无需登录、无需 key。',
       '',
-      '## 环境要求',
+      '## 开箱即用',
       '',
-      '- Node.js 18+;默认构建目标 Dify 1.16(graphon 0.6);免费体验入口 try.nodecoda.com(设备日限 50 次),',
-      '  注册后可获得专属服务器、更高配额与历史构建查询。',
+      '- Node.js 18+ 即可开始,目标平台 Dify 1.16。先免费体验(try.nodecoda.com),',
+      '  注册后解锁专属服务器与更多功能。',
       '',
       '---',
       '',
-      '> 以下为 Agent 执行规范(安装自举、核心边界、MCP 契约、错误码与配额处理),人工浏览可跳过。',
+      '> 以下是给 AI Agent 看的技术细节(安装、接口约定、错误处理等),普通用户无需阅读。',
       '',
       '',
     ].join('\n');
