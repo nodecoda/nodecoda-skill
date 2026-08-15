@@ -12,6 +12,9 @@
   不改 Source、不伪造 build_id。
 
 ### Changed
+- **SkillHub 详情页展示化**（build-skillhub.mjs）：发布包 SKILL.md frontmatter `description` 改为用户向
+  中文简介（平台将其放入"中文简介"槽），正文顶部新增「这是什么 / 快速上手 / 环境要求」用户向介绍；
+  源 SKILL.md 与 npm 安装路径不变，agent 触发词保留。
 - `references/mcp-contract.md`：Build 段补 `Idempotency-Key` header 双份要求；Poll 段补 REST 直连
   artifact 需单独 `GET /v1/workflow-builds/{build_id}/artifact`。
 - `references/project-workflow.md`：补同 Source 重建完整状态链

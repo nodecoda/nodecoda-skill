@@ -1,6 +1,6 @@
 {
   "name": "nodecoda-workflow",
-  "version": "0.2.30",
+  "version": "0.2.31",
   "description": "Author, validate, and build Dify workflows via NodeCoda MCP. Use when the user wants to author .ncoda source, call build_dify_workflow, interpret diagnostics, or iterate on Dify workflow generation. Live: codex + public deployment wired.",
   "platforms": [
     "claude-code",

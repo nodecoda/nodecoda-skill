@@ -203,6 +203,51 @@ async function build() {
     grammarRehosted = true;
   }
 
+  // 2.6 展示化改写(仅 SkillHub 发布包):详情页「概览」直接渲染 SKILL.md 全文,
+  //     frontmatter 的 description 被平台放入"中文简介"槽。源 SKILL.md 保留
+  //     agent 触发词(本地/npm 安装路径用源),发布包里改成用户向展示版。
+  const skillMdPath = join(outDir, 'SKILL.md');
+  if (existsSync(skillMdPath)) {
+    let md = await readFile(skillMdPath, 'utf8');
+    const fm = md.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (fm) {
+      const block = fm[1]
+        .replace(/^description:.*$/m,
+          'description: 把工作流需求写成可版本化的 NodeCoda Source,一键构建经目标平台校验的 Dify Workflow(编写、校验、构建 Dify 工作流)。')
+        .replace(/^summary:.*$/m,
+          'summary: Author, validate, and build Dify workflows via NodeCoda MCP.');
+      md = md.replace(fm[0], `---\n${block}\n---`);
+    }
+    const intro = [
+      '',
+      '## 这是什么',
+      '',
+      '一个把「工作流需求」变成「可直接运行的 Dify Workflow」的技能:你描述需求,它写出可版本化的',
+      'NodeCoda Source,再调用 NodeCoda 构建服务生成经目标平台校验的 Dify Workflow 产物(`*.dify.yaml`)。',
+      '',
+      '## 快速上手',
+      '',
+      '1. **安装**:项目目录执行 `npx -y @nodecoda/skill add nodecoda-workflow`,自动接入 Codex /',
+      '   Claude Code / Gemini CLI / Cursor 并注册 `nodecoda` MCP server,重启会话后即可使用;',
+      '2. **使用**:直接描述工作流需求(用途 / 输入输出 / 依赖 / 边界),Agent 会写 Source、构建并交付产物;',
+      '3. **免 Agent 直连**:`npx -y @nodecoda/skill build <file.ncoda>` 无需登录、无需 key,产物落在源码同目录。',
+      '',
+      '## 环境要求',
+      '',
+      '- Node.js 18+;默认构建目标 Dify 1.16(graphon 0.6);免费体验入口 try.nodecoda.com(设备日限 50 次),',
+      '  注册后可获得专属服务器、更高配额与历史构建查询。',
+      '',
+      '---',
+      '',
+      '> 以下为 Agent 执行规范(安装自举、核心边界、MCP 契约、错误码与配额处理),人工浏览可跳过。',
+      '',
+      '',
+    ].join('\n');
+    md = md.replace(/^## 安装 \/ 自举/m, intro + '## 安装 / 自举');
+    await writeFile(skillMdPath, md, 'utf8');
+    console.log(`${c.cyan}note${c.reset}: SKILL.md rewritten to user-facing listing (frontmatter description + intro)`);
+  }
+
   // 2. mirror examples/*.ncoda -> examples/<name>.md
   for (const rel of mirrored) {
     const src = await readFile(join(sourceDir, rel), 'utf8');
