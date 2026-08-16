@@ -257,7 +257,7 @@ try 的 guest admission 返回**结构化 JSON 状态**（HTTP 200，包在 `dat
 | status | 含义 | 客户端处理 |
 |---|---|---|
 | `queued` | 放行，已入队 | 正常轮询；`quota.success_used` 可在**低干扰**下展示「已使用 N 次」——**不**渲染剩余次数、倒计时或稀缺话术（轮询响应的状态已由客户端归一化为 `QUEUED`/`BUILDING`/`SUCCEEDED`/`FAILED`/`CANCELLED` 大写契约；try 的 artifact 内容内联在 poll 响应中） |
-| `throttled` | 瞬态限流（`reason=device_rate` / `ip_quota`） | MCP server 已自动按 `retry_after_ms` sleep 后退避重试**原提交**（同幂等 key），有界 ≤3 次；若最终仍返回 `throttled`（带 `_client_retries`），温和提示「服务器繁忙，稍等片刻再试」并附 quota 摘要，不硬报错、**不改 Source** |
+| `throttled` | 并发闸排队（`reason=device_pending`，per-device 2 在途满） | MCP server 已自动按 `retry_after_ms` sleep 后退避重试**原提交**（同幂等 key），有界 ≤3 次；若最终仍返回 `throttled`（带 `_client_retries`），温和提示「服务器繁忙，稍等片刻再试」并附 quota 摘要，不硬报错、**不改 Source** |
 | `exhausted` | 设备日限软停（**非 error**） | 展示 server 下发的 `message`（温和文案）与「已使用 N 次」（`quota.success_used`）；`register_hint: true` 时附加注册引导话术；无倒计时 |
 
 **成功路径**：`quota` 块随放行响应返回，只用于可选的「已使用 N 次」；不主动提剩余、不催注册（阶段 1 用户面无压力话术）。
@@ -269,7 +269,7 @@ try 的 guest admission 返回**结构化 JSON 状态**（HTTP 200，包在 `dat
 | 错误码 | 含义 | 处理 |
 |---|---|---|
 | `GUEST_QUOTA_EXHAUSTED` | 免费配额用尽 | 两种形态：① 结构化 `status:"exhausted"`（软停，非 error，见上表）→ 展示 server `message` + 「已使用 N 次」，`register_hint: true` 才加注册引导；② HTTP 429 硬拒（全局在途满/预算超限）→ 同样文案。可提议 `npx -y @nodecoda/skill login` 一键转正 |
-| `GUEST_IP_RATE_LIMITED` | 网络限流 | 现为结构化 `status:"throttled" reason="ip_quota"`——MCP server 已自动退避重试 ≤3 次；仍失败则提示"稍等片刻再试"，继续当前任务 |
+| `GUEST_IP_RATE_LIMITED` | 网络日总量用尽 | 结构化 `status:"exhausted"`（软停，非 error）——展示 server `message`（「该网络今日免费构建额度已用完，明天自动重置」）+「已使用 N 次」；不重试、无倒计时 |
 | `GUEST_DEVICE_REQUIRED` | 缺设备头（异常） | 自动重试一次；仍失败则提示重装 MCP server |
 | `GUEST_DEVICE_BLOCKED` | 设备被标记 | 温和提示联系支持，不纠缠 |
 | `GUEST_EPOCH_ENDED` | 战役已结束 | 关停文案："免费体验已结束，正式版见 nodecoda.com"，引导用正式 key 或注册 |

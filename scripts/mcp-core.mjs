@@ -267,17 +267,19 @@ export class JsonRpcUpstream {
   }
 }
 
-// ---- guest throttle retry -------------------------------------------------
-// try.nodecoda.com's guest admission is progressive: when the device/IP has
-// crossed its rate tier the gateway answers HTTP 200 with a structured
-// { status: "throttled", reason, retry_after_ms, quota } payload instead of a
-// hard error (nodecoda-guest-rate-limit-model.md §6). A throttled admission
-// never created a build, so the client sleeps retry_after_ms and replays the
-// SAME submission (same idempotency key). Bounded retries; if the throttle
-// persists the final payload is passed through with a client-side
-// `_client_retries` annotation so the agent can tell first-throttle from
-// retries-exhausted. `exhausted` (device daily soft stop) is a product state,
-// NOT a failure — it is never retried and passes through untouched.
+// ---- guest queue retry ----------------------------------------------------
+// try.nodecoda.com's guest admission (v0.2, nodecoda-guest-rate-limit-model.md
+// §6.2): when the per-device concurrency gate (2 in-flight) is full the
+// gateway answers HTTP 200 with a structured
+// { status: "throttled", reason: "device_pending", retry_after_ms, quota }
+// payload instead of a hard error. A queued admission never created a build,
+// so the client sleeps retry_after_ms and replays the SAME submission (same
+// idempotency key) — task-queue backpressure, not a quality throttle. Bounded
+// retries; if the gate stays full the final payload is passed through with a
+// client-side `_client_retries` annotation so the agent can tell first-queue
+// from retries-exhausted. `exhausted` (device/IP daily soft stop) is a
+// product state, NOT a failure — it is never retried and passes through
+// untouched.
 export const MAX_THROTTLE_RETRIES = 3;
 export const DEFAULT_RETRY_AFTER_MS = 5000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
