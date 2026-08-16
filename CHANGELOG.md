@@ -5,6 +5,60 @@ All notable changes to this distribution repository will be documented in this f
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.35] - 2026-08-15
+
+### Added - 生态同步就绪(skills.sh / SkillsMP / SkillsCat 聚合平台接入)
+
+- 新增 `skills.sh.json`:skills.sh 目录分组元数据(分组 → nodecoda-workflow)。
+- 新增 `scripts/publish-ecosystems.mjs` 发布前就绪检查:SKILL.md frontmatter /
+  manifest↔package 版本对齐 / skills.sh.json,并输出各平台同步清单;`--check` 供 CI 使用。
+- `release.yml` 新增 ecosystem-sync job:每次 tag 发布后自动校验生态元数据。
+- README/README.zh-CN 新增 Skill marketplaces 节 + skills.sh 徽章,修正过期版本号。
+- docs/ecosystem-publishing.md:各平台收录机制实测(skills.sh 遥测+issue #1970 /
+  SkillsMP 纯爬虫 / SkillsCat 自动+submit / agentskill.sh Web 表单 / SkillsPAI 未上线)。
+
+### Changed - SkillHub 营销文案加「为什么值得信」
+
+- 发布包用户向介绍新增:手工搭 Dify 的坑(节点ID/handle/插件依赖)、
+  AI 直接生成 YAML 的翻车风险、构建校验背书(过不了不交付)、
+  边界声明(运行时行为由用户在 Dify 配置确认)。
+
+## [0.2.34] - 2026-08-15
+
+### Changed - 删除「开箱即用」展示段,精简营销文案
+
+- 发布包用户向介绍去掉 Node.js/Dify 1.16/免费体验与注册引导,保留
+  这是什么 + 快速上手 + 官网/GitHub 链接。
+
+## [0.2.33] - 2026-08-15
+
+### Changed - 展示文案营销化,收益导向 + 官网/GitHub 链接 + 去配额宣传
+
+- 发布包用户向介绍改为营销向:不用自己写 YAML、几分钟拿成品。
+- 环境要求 → 开箱即用;去掉(设备日限 50 次)等配额宣传。
+- 新增 GitHub 链接;H1 引导段与 frontmatter description 用户向表述。
+- 源 SKILL.md 与 npm 路径保持 agent 向不变。
+
+## [0.2.32] - 2026-08-15
+
+### Changed - 展示名改名 NodeCoda Dify Workflow + 口号/官网/直接导入
+
+- displayName:NodeCoda Workflow → NodeCoda Dify Workflow(H1 同步)。
+- 发布包用户向介绍:新增口号「让 AI Agent 构建你信得过的 Dify 工作流」、
+  官网 https://www.nodecoda.com;快速上手改为「真正导入、无需检测」。
+- slug nodecoda-workflow 不变;源 SKILL.md 与 npm 路径不受影响。
+
+## [0.2.31] - 2026-08-15
+
+### Added - 详情页展示化,发布包 SKILL.md 用户向改写
+
+- SkillHub 详情页「概览」直接渲染 SKILL.md 全文,frontmatter description 被平台
+  放入"中文简介"槽。
+- build-skillhub.mjs 对发布包 SKILL.md 做展示化改写:description 改为用户向中文简介
+  (summary 同步为英文用户简介);正文顶部新增「这是什么 / 快速上手 / 环境要求」
+  用户向介绍段;agent 执行规范保留在下方(人工可跳过)。
+- 源 SKILL.md 保留 agent 触发词(本地/npm 路径不变)。
+
 ## [0.2.30] - 2026-08-15
 
 ### Changed - SkillHub 发布脚本对接 skillhub.cn 真实 CLI(修正 0.2.29 误用 @astron-team/skillhub)
